@@ -1,0 +1,18 @@
+{
+  // This file exists here to make vscode happy. We just include compile/checking options.
+  // No includes/excludes should be needed here.
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "jsx": "react",
+    "sourceMap": true,
+    "strict": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "noUnusedLocals": true,
+    "resolveJsonModule": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true
+  }
+}

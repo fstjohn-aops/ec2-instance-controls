@@ -1,0 +1,27 @@
+{
+	// Note: Changes in here may need to be copied to tsconfig.json
+	"compilerOptions": {
+		"target": "es6",
+		"module": "commonjs",
+		"jsx": "react",
+		"sourceMap": true,
+		"strict": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"experimentalDecorators": true,
+		"noUnusedLocals": true,
+		"skipLibCheck": true,
+		"resolveJsonModule": true,
+		"noUncheckedIndexedAccess": true,
+		"outDir": "tsout"
+	},
+	"include": ["src"],
+	"exclude": [
+		"src/**/*.test.ts",
+		"src/**/*.test.js",
+		"src/**/*.spec.ts",
+		"src/**/*.spec.js",
+		"src/**/__tests__/**",
+		"src/**/__mocks__/**"
+	]
+}

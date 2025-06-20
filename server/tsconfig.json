@@ -1,0 +1,27 @@
+{
+	// Note: Changes in here may need to be copied to tsconfig.build.json
+	"compilerOptions": {
+		"target": "es6",
+		"module": "commonjs",
+		"jsx": "react",
+		"sourceMap": true,
+		"strict": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"experimentalDecorators": true,
+		"noUnusedLocals": true,
+		"resolveJsonModule": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true
+	},
+	"include": [
+		"src",
+		"test",
+		"tools",
+		"migrations",
+		"seeds",
+		"*.js",
+		"*.ts",
+		"src/pages"
+	]
+}

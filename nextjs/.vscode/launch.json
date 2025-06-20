@@ -1,0 +1,13 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "node-terminal",
+			"request": "launch",
+			"name": "Next.js",
+			"command": "npm run dev",
+			"cwd": "${workspaceFolder}",
+			"timeout": 10000
+		}
+	]
+}

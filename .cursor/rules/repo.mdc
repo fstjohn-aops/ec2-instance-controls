@@ -1,0 +1,19 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Repo Setup
+- `server/`
+	- Framework: Fastify, TypeScript
+	- Purpose: API Server, Business Logic, Database Operations
+- `nextjs/`
+	- Framework: NextJS 14, App Router, TypeScript
+	- Purpose: Frontend Server, Presentation, Platform-Auth Sessions
+
+## Organization
+- Do NOT define multiple components in a single file.
+- Organize components in separate files, group them in folders based on their business function/domain.
+
+## **Naming Conventions**:
+- Use self-descriptive names that convey the business purpose of files/components/methods.

@@ -1,0 +1,136 @@
+# https://taskfile.dev
+
+version: '3'
+
+includes:
+  util:
+    taskfile: ../Taskfile.util.yml
+    internal: true
+
+vars:
+  NEXTJS_PORT: 13030
+  STORYBOOK_PORT: 6006
+  PRETTIER_GLOB: "./**/*.{js,jsx,ts,tsx,css,scss,json}"
+
+tasks:
+  default:
+    desc: List available tasks.
+    aliases: [ls, list]
+    silent: true
+    cmds:
+      - task: util:list
+
+  ######################## 🔧 DEV COMMANDS 🔧 ########################
+  ################# 🔧 Commands you'll use OFTEN. 🔧 #################
+
+  install:
+    desc: Install client dependencies.
+    aliases: [i]
+    deps: [util:trove-configure-codeartifact]
+    sources:
+      - ./package*.json
+    generates:
+      - ./node_modules/**/*
+    cmds:
+      # Ignore confusing pre/post install scripts in package.json
+      - npm install --ignore-scripts
+
+  dev:
+    desc: Build and watch the client code.
+    aliases: [watch, w]
+    cmds:
+      - npx next dev --port {{.NEXTJS_PORT}}
+
+  ######################### 🔧 custom tasks 🔧 ########################
+
+  # Add any custom DEV COMMANDS tasks here.
+
+  ######################## 📦 INSTALL/BUILD 📦 #######################
+  ############## 📦 Commands for creating the client. 📦 #############
+
+  build:
+    summary: Build the client code.
+    cmds:
+      - npx next build
+
+  start:
+    summary: Start the production server.
+    cmds:
+      - npx next start
+
+  ######################### 📦 custom tasks 📦 ########################
+
+  # Add any custom INSTALL/BUILD tasks here.
+
+  ########################### 🧹 LINTING 🧹 ###########################
+  ######## 🧹 Commands for checking and cleaning the code. 🧹 #########
+
+  check:
+    desc: Check the client code.
+    aliases: [c]
+    # Runs all checks in parallel.
+    deps: [format-check, lint, ts-check, test]
+
+  format:
+    summary: Prettify the client code.
+    aliases: [p, pretty, pretty-all]
+    cmds:
+      - npx prettier "{{.PRETTIER_GLOB}}" --write
+
+  format-check:
+    summary: Check the client code for prettier violations.
+    aliases: [pretty-check]
+    cmds:
+      - npx prettier "{{.PRETTIER_GLOB}}" --check
+
+  lint:
+    summary: Lint the client code.
+    cmds:
+      - npx next lint
+
+  ts-check:
+    summary: Type check the client code.
+    aliases: [ts, tsc]
+    cmds:
+      - npx tsc
+
+  ######################### 🧹 custom tasks 🧹 ########################
+
+  # Add any custom LINTING tasks here.
+
+  ########################### 🧪 TESTING 🧪 ###########################
+  ################# 🧪 Commands for running tests. 🧪 #################
+
+  test:
+    desc: Run all client tests.
+    cmds:
+      - npx jest
+
+  test-watch:
+    summary: Run client tests in watch mode.
+    cmds:
+      - npx jest --watch
+
+  ######################### 🧪 custom tasks 🧪 ########################
+
+  # Add any custom TESTING tasks here.
+
+  ########################### 🧰 UTILITY 🧰 ###########################
+  ############### 🧰 Commands you'll use SOMETIMES. 🧰 ################
+
+  # TODO: add analyze task in
+
+  storybook:
+    summary: Start the Storybook development server.
+    cmds:
+      - cmd: npx storybook dev -p {{.STORYBOOK_PORT}}
+        ignore_error: true  # ignore red error line on kill watch process
+
+  build-storybook:
+    summary: Build the Storybook static site.
+    cmds:
+      - npx storybook build
+
+  ######################### 🧰 custom tasks 🧰 ########################
+
+  # Add any custom UTILITY tasks here.

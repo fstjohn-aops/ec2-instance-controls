@@ -1,0 +1,100 @@
+---
+# Node server config used by locals outside of Docker. Also has some comments
+# explaining some fields. See README_config.md for more info on the role this
+# file plays.
+
+# In here, ${NAME} is replaced with the environment variable of the provided
+# name. Often .env has these. If you want a default value, use the special
+# $envDefaults map in this file.
+
+$envDefaults:
+  # Maps env variable names to default values to use. These take effect if the
+  # variable is missing or the empty string.
+
+  # Recommended to only use this for backwards compatibility purposes. Normally
+  # we should just provide the right default in .env.sample. The recommended
+  # use case is if a previously fixed value needs to become a variable.
+  # $envDefaults can make this happen without having to edit all existing .env
+  # files.
+
+  AOPS_API_URL: https://aopstest.com
+
+# Dev flags. All keys are optional. The values in here are ignored in
+# production environments (determined by process.env.NODE_ENV).
+dev:
+  # Allow logging in as username "dev" and any password without going
+  # through a login system.
+  allowDevLogin: true
+  # If true, crons do not run even when workers are active.
+  disableCrons: true
+
+# Each entry in this table should specify host, dbname, user, password.
+# port can also be set but will default to 5432, used by Postgres.
+db:
+  # The db configuration used by default on the server.
+  development:
+    host: localhost
+    port: 13541
+    dbname: fastackstarter
+    user: website
+    password: ${SECRET_DATABASE_PASSWORD}
+  # The db configuration used by automated tests.
+  test:
+    host: localhost
+    port: 13542
+    dbname: fastackstarter_test
+    user: website_test
+    password: fakepasswordfortests
+  testserver:
+    host: # Add host here
+    port: 13541
+    dbname: fastackstarter
+    user: website
+    password: ${SECRET_DATABASE_PASSWORD_TEST_SERVER}
+
+# String indexing into db table above or object with host, port, etc.
+serverDb: development
+
+# Host and port to listen on. In Docker, host should be 0.0.0.0.
+host: "localhost"
+port: 13031
+baseUrl: ${FASTIFY_BASE_URL}
+
+# Have the same process function as both a server and a job queue worker. Used
+# to simplify non-docker dev environments. Not set in docker, even dev, since
+# docker compose can easily manage both main and worker processes.
+alsoWorker: true
+
+# API key for making requests to handlers with `requireApiKey: true`. Defined in .env
+apiKey: ${SECRET_FASTACK_STARTER_API_KEY}
+
+# Host/port for connecting to Redis.
+redisHost: localhost
+redisPort: 13540
+# DB number to use in Redis, in case multiple apps are using the same Redis
+# instance. Applicable on locals not using Docker.
+redisDb: 0
+redisPassword: ${REDIS_PASSWORD}
+
+cookieSignatureKey: ${COOKIE_SIGNATURE_KEY}
+applicationCode: fastackstarter
+
+# URL/credentials for communicating with Platform's API.
+platform:
+  # URL usable for server-side communication. If running inside Docker,
+  # and connecting to localhost, set this to host.docker.internal:PORT.
+  url: "https://gateway.aopspldev.com"
+  # API Key for server-side communication.
+  apiKey: ${SECRET_PLATFORM_API_KEY}
+  # URL for login
+  loginDomain: "https://login.aopspldev.com"
+
+# AoPS API info
+aops:
+  url: ${AOPS_API_URL}
+  api:
+    key: ${SECRET_AOPS_API_KEY}
+    email: fastackstarter
+  htaccess:
+    user: ${SECRET_AOPS_HTACCESS_USER}
+    password: ${SECRET_AOPS_HTACCESS_PASSWORD}

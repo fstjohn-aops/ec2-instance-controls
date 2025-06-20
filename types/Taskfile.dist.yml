@@ -1,0 +1,94 @@
+# https://taskfile.dev
+
+version: '3'
+
+includes:
+  util:
+    taskfile: ../Taskfile.util.yml
+    internal: true
+vars:
+  STORYBOOK_PORT: 6006
+  PRETTIER_GLOB: "{src,test,tools}/**/*.{js,jsx,ts,tsx,css,scss,json}"
+
+tasks:
+  default:
+    desc: List available tasks.
+    aliases: [ls, list]
+    silent: true
+    cmds:
+      - task: util:list
+
+  ######################## 🔧 DEV COMMANDS 🔧 ########################
+  ################# 🔧 Commands you'll use OFTEN. 🔧 #################
+
+  install:
+    desc: Install types dependencies.
+    aliases: [i]
+    deps: [util:trove-configure-codeartifact]
+    sources:
+      - ./package*.json
+    generates:
+      - ./node_modules/**/*
+    cmds:
+      # Ignore confusing pre/post install scripts in package.json
+      - npm install --ignore-scripts
+
+  ######################### 🔧 custom tasks 🔧 ########################
+
+  # Add any custom DEV COMMANDS tasks here.
+
+  ########################### 🧪 TESTING 🧪 ###########################
+  ################# 🧪 Commands for running tests. 🧪 #################
+
+  test:
+    summary: Run all type tests.
+    cmds:
+      - npx jest
+
+  test-watch:
+    summary: Run type tests in watch mode.
+    cmds:
+      - npx jest --watch
+
+  test-ci:
+    summary: Run type tests for CI, including code generation.
+    cmds:
+      - task: gen-all
+      - npx jest
+
+  ######################### 🧪 custom tasks 🧪 ########################
+
+  # Add any custom TESTING tasks here.
+
+  ########################### 🧰 UTILITY 🧰 ###########################
+  ############### 🧰 Commands you'll use SOMETIMES. 🧰 ################
+
+  publish:
+    desc: Publish the types package to Trove.
+    aliases: [publish-trove]
+    deps: [install]
+    cmds:
+      - task: gen-all
+      - trove publish
+
+  ######################### 🧰 custom tasks 🧰 ########################
+
+  # Add any custom UTILITY tasks here.
+
+  ########################## ⚙️ CODEGEN ⚙️ ############################
+  ############## ⚙️ Commands for generating code. ⚙️ ##################
+
+  gen-all:
+    desc: Run all code generation tasks.
+    aliases: [gen, generate]
+    cmds:
+      - task: gen-validators
+
+  gen-validators:
+    summary: Generate TypeBox validators from types.
+    cmds:
+      - npx tsx generate-validators.ts
+
+  ######################### ⚙️ custom tasks ⚙️ ########################
+
+  # Add any custom CODEGEN tasks here.

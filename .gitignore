@@ -1,0 +1,34 @@
+# Editor/OS files
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.idea
+.vscode/settings.json
+.hushlogin
+
+# Generated files
+*.js.map
+npm-debug.log
+node_modules
+.eslintcache
+.cache-loader
+.cache
+.next
+dist
+tsout
+node_modules
+
+# Environment file with secrets
+.env
+
+# Server files
+server/config.override.yaml
+server/docker-compose.override.yml
+server/server.log
+server/dbDir
+server/payload.json
+
+# Taskfile cache
+.task/
+# Allow local Taskfile overrides
+**/Taskfile.yml

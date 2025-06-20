@@ -1,0 +1,7 @@
+---
+description: 
+globs: *.ts,*.tsx,*.js,*.jsx
+alwaysApply: false
+---
+## **Comments**:
+- All functions should include **JSDoc comments** with an explanation of its **business purpose** and its role in the application.

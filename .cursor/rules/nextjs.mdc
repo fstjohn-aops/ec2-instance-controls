@@ -1,0 +1,8 @@
+---
+description: 
+globs: nextjs/**/*
+alwaysApply: false
+---
+# Routing
+- ALWAYS use the App Router
+- NEVER use the Pages Router

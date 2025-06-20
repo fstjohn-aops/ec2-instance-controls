@@ -1,0 +1,36 @@
+---
+description: 
+globs: *.scss,*.module.scss
+alwaysApply: false
+---
+# Nesting
+- SCSS rules should ideally nest to match hierarchical usage in the component tree. e.g.:
+	```tsx
+	// ImageGallery.tsx
+	return <div className={styles.gallery}>
+			<figure className={styles.imageWrapper}>
+				<img className={styles.image}/>
+				<figcaption className={styles.caption}>
+					Hello world.
+				</figcaption>
+			</figure>
+		</div>
+	);
+	```
+
+	```scss
+	// ImageGallery.module.scss
+	.gallery {
+		// ...
+		.imageWrapper {
+			// ...
+			.image {
+				// ...
+			}
+
+			.caption {
+				// ...
+			}
+		}
+	}
+	```

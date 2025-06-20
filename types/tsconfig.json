@@ -1,0 +1,13 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "CommonJS",
+		"declaration": true,
+		"strict": true,
+		"esModuleInterop": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": false
+	},
+	"include": ["src/*.ts", "generate-validators.ts"],
+	"exclude": ["node_modules"]
+}

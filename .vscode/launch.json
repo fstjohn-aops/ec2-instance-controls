@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "compounds": [
+    {
+      "name": "Both",
+      "stopAll": true,
+      "configurations": ["Fastify", "Next.js"],
+      "presentation": {
+        "order": 1
+      }
+    }
+  ],
+  "configurations": [
+    {
+      "presentation": {
+        "order": 2
+      },
+      "name": "Fastify",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/server",
+      "command": "npm run docker && npm run dev",
+      "timeout": 10000
+    },
+    {
+      "presentation": {
+        "order": 3
+      },
+      "name": "Next.js",
+      "type": "node-terminal",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/nextjs",
+      "command": "npm run dev",
+      "timeout": 10000
+    }
+  ]
+}

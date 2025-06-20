@@ -1,0 +1,59 @@
+---
+# Node server config used by development environments running in Docker. See
+# README_config.md for more info on the role this file plays. See
+# config.dev.nondocker.yaml for comments explaining some fields.
+
+$envDefaults:
+  AOPS_API_URL: https://aopstest.com
+
+dev:
+  allowDevLogin: true
+  disableCrons: true
+
+db:
+  development:
+    host: postgres
+    dbname: fastackstarter
+    user: website
+    password: ${SECRET_DATABASE_PASSWORD}
+  test:
+    host: postgres_test
+    dbname: fastackstarter_test
+    user: website_test
+    password: fakepasswordfortests
+  testserver:
+    host: # Add host here
+    dbname: fastackstarter
+    user: website
+    password: ${SECRET_DATABASE_PASSWORD_TEST_SERVER}
+
+serverDb: development
+
+host: "0.0.0.0"
+port: 13031
+baseUrl: ${FASTIFY_BASE_URL}
+
+apiKey: ${SECRET_FASTACK_STARTER_API_KEY}
+
+redisHost: redis
+redisPort: 13540
+redisDb: 0
+redisPassword: ${REDIS_PASSWORD}
+
+cookieSignatureKey: ${COOKIE_SIGNATURE_KEY}
+applicationCode: fastackstarter
+
+platform:
+  url: "https://gateway.aopspldev.com"
+  loginDomain: "https://login.aopspldev.com"
+  apiKey: ${SECRET_PLATFORM_API_KEY}
+
+# AoPS API info
+aops:
+  url: ${AOPS_API_URL}
+  api:
+    key: ${SECRET_AOPS_API_KEY}
+    email: fastackstarter
+  htaccess:
+    user: ${SECRET_AOPS_HTACCESS_USER}
+    password: ${SECRET_AOPS_HTACCESS_PASSWORD}

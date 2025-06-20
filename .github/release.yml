@@ -1,0 +1,9 @@
+changelog:
+  categories:
+    - title: 🎉 Features 🎉
+      labels:
+        - feature launch
+        - hidden behind feature flag
+    - title: 🚂 Miscellaneous Changes 🚂
+      labels:
+        - "*"
