@@ -16,6 +16,10 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
+# Initialize database on app startup
+with app.app_context():
+    init_db()
+
 # Initialize Slack app
 slack_token = os.environ.get("SLACK_BOT_TOKEN")
 slack_signing_secret = os.environ.get("SLACK_SIGNING_SECRET")
@@ -612,8 +616,5 @@ def oauth_redirect():
         return jsonify({"error": "Slack not configured"}), 503
 
 if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    
     # Run Flask app
     app.run(host='0.0.0.0', port=5000, debug=True) 
