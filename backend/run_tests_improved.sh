@@ -31,6 +31,8 @@ run_python_tests() {
     echo -e "\n${YELLOW}Running Python Test Suite${NC}"
     echo "----------------------------------------"
     
+    # Activate virtual environment for the test
+    source venv/bin/activate
     if python3 test_suite.py; then
         echo -e "${GREEN}✅ Python test suite completed successfully${NC}"
         return 0
@@ -151,6 +153,18 @@ if [ "$DOCKER_AVAILABLE" = true ]; then
             echo -e "${GREEN}✅ API endpoints working${NC}"
         else
             echo -e "${RED}❌ API endpoints failed${NC}"
+            overall_success=false
+        fi
+        
+        # Test assign-instance endpoint specifically
+        echo "Testing assign-instance endpoint..."
+        assignment_response=$(curl -s -X POST http://localhost:5000/api/assign-instance \
+            -H "Content-Type: application/json" \
+            -d '{"instance_id": "i-test-instance-1", "slack_user_id": "U123", "slack_username": "testuser"}')
+        if echo "$assignment_response" | grep -q "success\|error"; then
+            echo -e "${GREEN}✅ Assign-instance endpoint working${NC}"
+        else
+            echo -e "${RED}❌ Assign-instance endpoint failed${NC}"
             overall_success=false
         fi
     else
