@@ -149,7 +149,7 @@ if [ "$DOCKER_AVAILABLE" = true ]; then
         # Test API endpoints
         echo "Testing API endpoints..."
         response=$(curl -s http://localhost:5000/api/assignments)
-        if echo "$response" | grep -q "assignments\|error"; then
+        if [ $? -eq 0 ] && echo "$response" | python3 -m json.tool >/dev/null 2>&1; then
             echo -e "${GREEN}✅ API endpoints working${NC}"
         else
             echo -e "${RED}❌ API endpoints failed${NC}"
@@ -161,7 +161,7 @@ if [ "$DOCKER_AVAILABLE" = true ]; then
         assignment_response=$(curl -s -X POST http://localhost:5000/api/assign-instance \
             -H "Content-Type: application/json" \
             -d '{"instance_id": "i-test-instance-1", "slack_user_id": "U123", "slack_username": "testuser"}')
-        if echo "$assignment_response" | grep -q "success\|error"; then
+        if [ $? -eq 0 ] && echo "$assignment_response" | python3 -m json.tool >/dev/null 2>&1; then
             echo -e "${GREEN}✅ Assign-instance endpoint working${NC}"
         else
             echo -e "${RED}❌ Assign-instance endpoint failed${NC}"
