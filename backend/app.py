@@ -17,10 +17,25 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Initialize Slack app
-slack_app = App(
-    token=os.environ.get("SLACK_BOT_TOKEN"),
-    signing_secret=os.environ.get("SLACK_SIGNING_SECRET")
-)
+slack_token = os.environ.get("SLACK_BOT_TOKEN")
+slack_signing_secret = os.environ.get("SLACK_SIGNING_SECRET")
+
+# Only initialize Slack app if we have valid credentials
+if slack_token and slack_signing_secret and not slack_token.startswith("xoxb-your"):
+    try:
+        slack_app = App(
+            token=slack_token,
+            signing_secret=slack_signing_secret
+        )
+        slack_handler = SlackRequestHandler(slack_app)
+    except Exception as e:
+        logger.warning(f"Failed to initialize Slack app: {e}")
+        slack_app = None
+        slack_handler = None
+else:
+    logger.warning("Slack credentials not properly configured. Slack functionality disabled.")
+    slack_app = None
+    slack_handler = None
 
 # Initialize AWS EC2 client
 ec2_client = boto3.client('ec2', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
@@ -97,86 +112,87 @@ def stop_instance(instance_id):
         raise
 
 # Slack slash command handlers
-@slack_app.command("/ec2-start")
-def handle_start_command(ack, respond, command):
-    """Handle /ec2-start command"""
-    ack()
-    user_id = command['user_id']
-    username = command['user_name']
-    
-    # Get user's instance
-    user_instance = get_user_instance(user_id)
-    if not user_instance:
-        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
-        return
-    
-    instance_id, instance_name = user_instance
-    
-    try:
-        current_status = get_instance_status(instance_id)
-        if current_status == 'running':
-            respond(f"Your instance {instance_name} ({instance_id}) is already running!")
-        elif current_status == 'stopped':
-            start_instance(instance_id)
-            respond(f"Starting your instance {instance_name} ({instance_id})...")
-        else:
-            respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be stopped before starting.")
-    except Exception as e:
-        respond(f"Error starting your instance: {str(e)}")
+if slack_app:
+    @slack_app.command("/ec2-start")
+    def handle_start_command(ack, respond, command):
+        """Handle /ec2-start command"""
+        ack()
+        user_id = command['user_id']
+        username = command['user_name']
+        
+        # Get user's instance
+        user_instance = get_user_instance(user_id)
+        if not user_instance:
+            respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
+            return
+        
+        instance_id, instance_name = user_instance
+        
+        try:
+            current_status = get_instance_status(instance_id)
+            if current_status == 'running':
+                respond(f"Your instance {instance_name} ({instance_id}) is already running!")
+            elif current_status == 'stopped':
+                start_instance(instance_id)
+                respond(f"Starting your instance {instance_name} ({instance_id})...")
+            else:
+                respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be stopped before starting.")
+        except Exception as e:
+            respond(f"Error starting your instance: {str(e)}")
 
-@slack_app.command("/ec2-stop")
-def handle_stop_command(ack, respond, command):
-    """Handle /ec2-stop command"""
-    ack()
-    user_id = command['user_id']
-    username = command['user_name']
-    
-    # Get user's instance
-    user_instance = get_user_instance(user_id)
-    if not user_instance:
-        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
-        return
-    
-    instance_id, instance_name = user_instance
-    
-    try:
-        current_status = get_instance_status(instance_id)
-        if current_status == 'stopped':
-            respond(f"Your instance {instance_name} ({instance_id}) is already stopped!")
-        elif current_status == 'running':
-            stop_instance(instance_id)
-            respond(f"Stopping your instance {instance_name} ({instance_id})...")
-        else:
-            respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be running before stopping.")
-    except Exception as e:
-        respond(f"Error stopping your instance: {str(e)}")
+    @slack_app.command("/ec2-stop")
+    def handle_stop_command(ack, respond, command):
+        """Handle /ec2-stop command"""
+        ack()
+        user_id = command['user_id']
+        username = command['user_name']
+        
+        # Get user's instance
+        user_instance = get_user_instance(user_id)
+        if not user_instance:
+            respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
+            return
+        
+        instance_id, instance_name = user_instance
+        
+        try:
+            current_status = get_instance_status(instance_id)
+            if current_status == 'stopped':
+                respond(f"Your instance {instance_name} ({instance_id}) is already stopped!")
+            elif current_status == 'running':
+                stop_instance(instance_id)
+                respond(f"Stopping your instance {instance_name} ({instance_id})...")
+            else:
+                respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be running before stopping.")
+        except Exception as e:
+            respond(f"Error stopping your instance: {str(e)}")
 
-@slack_app.command("/ec2-status")
-def handle_status_command(ack, respond, command):
-    """Handle /ec2-status command"""
-    ack()
-    user_id = command['user_id']
-    username = command['user_name']
-    
-    # Get user's instance
-    user_instance = get_user_instance(user_id)
-    if not user_instance:
-        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
-        return
-    
-    instance_id, instance_name = user_instance
-    
-    try:
-        current_status = get_instance_status(instance_id)
-        respond(f"Your instance {instance_name} ({instance_id}) is currently {current_status}.")
-    except Exception as e:
-        respond(f"Error getting instance status: {str(e)}")
+    @slack_app.command("/ec2-status")
+    def handle_status_command(ack, respond, command):
+        """Handle /ec2-status command"""
+        ack()
+        user_id = command['user_id']
+        username = command['user_name']
+        
+        # Get user's instance
+        user_instance = get_user_instance(user_id)
+        if not user_instance:
+            respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
+            return
+        
+        instance_id, instance_name = user_instance
+        
+        try:
+            current_status = get_instance_status(instance_id)
+            respond(f"Your instance {instance_name} ({instance_id}) is currently {current_status}.")
+        except Exception as e:
+            respond(f"Error getting instance status: {str(e)}")
 
-@slack_app.command("/ec2-help")
-def handle_help_command(ack, respond):
-    """Handle /ec2-help command"""
-    ack()
-    help_text = """
+    @slack_app.command("/ec2-help")
+    def handle_help_command(ack, respond):
+        """Handle /ec2-help command"""
+        ack()
+        help_text = """
 *EC2 Instance Control Commands*
 
 • `/ec2-start` - Start your assigned instance
@@ -188,8 +204,8 @@ def handle_help_command(ack, respond):
 • Assign instance to user: `POST /api/assign-instance`
 • List all assignments: `GET /api/assignments`
 • Remove assignment: `DELETE /api/assignments/{user_id}`
-    """
-    respond(help_text)
+        """
+        respond(help_text)
 
 # Flask API endpoints
 @app.route('/health')
@@ -283,22 +299,29 @@ def get_instance_status_api(instance_id):
         return jsonify({"error": str(e)}), 500
 
 # Slack request handler
-handler = SlackRequestHandler(slack_app)
-
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     """Handle Slack events"""
-    return handler.handle(request)
+    if slack_handler:
+        return slack_handler.handle(request)
+    else:
+        return jsonify({"error": "Slack not configured"}), 503
 
 @app.route("/slack/install", methods=["GET"])
 def install():
     """Handle Slack app installation"""
-    return handler.handle(request)
+    if slack_handler:
+        return slack_handler.handle(request)
+    else:
+        return jsonify({"error": "Slack not configured"}), 503
 
 @app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_redirect():
     """Handle OAuth redirect"""
-    return handler.handle(request)
+    if slack_handler:
+        return slack_handler.handle(request)
+    else:
+        return jsonify({"error": "Slack not configured"}), 503
 
 if __name__ == '__main__':
     # Initialize database
