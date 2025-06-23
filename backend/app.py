@@ -16,10 +16,6 @@ logger = logging.getLogger(__name__)
 # Initialize Flask app
 app = Flask(__name__)
 
-# Initialize database on app startup
-with app.app_context():
-    init_db()
-
 # Initialize Slack app
 slack_token = os.environ.get("SLACK_BOT_TOKEN")
 slack_signing_secret = os.environ.get("SLACK_SIGNING_SECRET")
@@ -82,6 +78,10 @@ def init_db():
         logger.info(f"Database initialized at {db_path}")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
+
+# Initialize database on app startup
+with app.app_context():
+    init_db()
 
 def get_instance_for_user(slack_user_id):
     """Get instance ID for a given Slack user"""
