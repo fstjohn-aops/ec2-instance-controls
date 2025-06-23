@@ -40,20 +40,31 @@ else:
 # Initialize AWS EC2 client
 ec2_client = boto3.client('ec2', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
 
+# Test mode flag
+TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
+
+# Mock instance states for test mode
+MOCK_INSTANCE_STATES = {
+    'i-0ecdfc9a2e3e53302': 'running',
+    'i-test-instance-1': 'stopped',
+    'i-test-instance-2': 'running',
+    'i-test-instance-3': 'stopped'
+}
+
 # Database setup
 def init_db():
-    """Initialize SQLite database with user-instance mappings"""
+    """Initialize SQLite database with instance-user mappings"""
     try:
         db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_instances (
+            CREATE TABLE IF NOT EXISTS instance_users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                slack_user_id TEXT UNIQUE NOT NULL,
-                slack_username TEXT NOT NULL,
                 instance_id TEXT UNIQUE NOT NULL,
                 instance_name TEXT,
+                slack_user_id TEXT NOT NULL,
+                slack_username TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -64,40 +75,72 @@ def init_db():
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 
-def get_user_instance(slack_user_id):
+def get_instance_for_user(slack_user_id):
     """Get instance ID for a given Slack user"""
     try:
         db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute('SELECT instance_id, instance_name FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
+        cursor.execute('SELECT instance_id, instance_name FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
         result = cursor.fetchone()
         conn.close()
         return result
     except Exception as e:
-        logger.error(f"Database error in get_user_instance: {e}")
+        logger.error(f"Database error in get_instance_for_user: {e}")
         return None
 
-def create_user_instance_mapping(slack_user_id, slack_username, instance_id, instance_name):
-    """Create or update user-instance mapping"""
+def get_users_for_instance(instance_id):
+    """Get all users that can control a given instance"""
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT slack_user_id, slack_username FROM instance_users WHERE instance_id = ?', (instance_id,))
+        results = cursor.fetchall()
+        conn.close()
+        return results
+    except Exception as e:
+        logger.error(f"Database error in get_users_for_instance: {e}")
+        return []
+
+def create_instance_user_mapping(instance_id, instance_name, slack_user_id, slack_username):
+    """Create or update instance-user mapping"""
     try:
         db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT OR REPLACE INTO user_instances 
-            (slack_user_id, slack_username, instance_id, instance_name, updated_at)
+            INSERT OR REPLACE INTO instance_users 
+            (instance_id, instance_name, slack_user_id, slack_username, updated_at)
             VALUES (?, ?, ?, ?, ?)
-        ''', (slack_user_id, slack_username, instance_id, instance_name, datetime.now()))
+        ''', (instance_id, instance_name, slack_user_id, slack_username, datetime.now()))
         conn.commit()
         conn.close()
     except Exception as e:
-        logger.error(f"Database error in create_user_instance_mapping: {e}")
+        logger.error(f"Database error in create_instance_user_mapping: {e}")
         raise
+
+def can_user_control_instance(slack_user_id, instance_id):
+    """Check if a user can control a specific instance"""
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1 FROM instance_users WHERE slack_user_id = ? AND instance_id = ?', (slack_user_id, instance_id))
+        result = cursor.fetchone()
+        conn.close()
+        return result is not None
+    except Exception as e:
+        logger.error(f"Database error in can_user_control_instance: {e}")
+        return False
 
 # EC2 instance management functions
 def get_instance_status(instance_id):
     """Get current status of an EC2 instance"""
+    if TEST_MODE:
+        # Return mock status in test mode
+        return MOCK_INSTANCE_STATES.get(instance_id, 'unknown')
+    
     try:
         response = ec2_client.describe_instances(InstanceIds=[instance_id])
         if response['Reservations']:
@@ -110,6 +153,14 @@ def get_instance_status(instance_id):
 
 def start_instance(instance_id):
     """Start an EC2 instance"""
+    if TEST_MODE:
+        # Simulate starting in test mode
+        if instance_id in MOCK_INSTANCE_STATES:
+            MOCK_INSTANCE_STATES[instance_id] = 'running'
+            logger.info(f"TEST MODE: Started instance {instance_id}")
+            return 'running'
+        return 'unknown'
+    
     try:
         response = ec2_client.start_instances(InstanceIds=[instance_id])
         return response['StartingInstances'][0]['CurrentState']['Name']
@@ -119,6 +170,14 @@ def start_instance(instance_id):
 
 def stop_instance(instance_id):
     """Stop an EC2 instance"""
+    if TEST_MODE:
+        # Simulate stopping in test mode
+        if instance_id in MOCK_INSTANCE_STATES:
+            MOCK_INSTANCE_STATES[instance_id] = 'stopped'
+            logger.info(f"TEST MODE: Stopped instance {instance_id}")
+            return 'stopped'
+        return 'unknown'
+    
     try:
         response = ec2_client.stop_instances(InstanceIds=[instance_id])
         return response['StoppingInstances'][0]['CurrentState']['Name']
@@ -136,7 +195,7 @@ if slack_app:
         username = command['user_name']
         
         # Get user's instance
-        user_instance = get_user_instance(user_id)
+        user_instance = get_instance_for_user(user_id)
         if not user_instance:
             respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
             return
@@ -163,7 +222,7 @@ if slack_app:
         username = command['user_name']
         
         # Get user's instance
-        user_instance = get_user_instance(user_id)
+        user_instance = get_instance_for_user(user_id)
         if not user_instance:
             respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
             return
@@ -190,7 +249,7 @@ if slack_app:
         username = command['user_name']
         
         # Get user's instance
-        user_instance = get_user_instance(user_id)
+        user_instance = get_instance_for_user(user_id)
         if not user_instance:
             respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
             return
@@ -235,7 +294,7 @@ def list_assignments():
         db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM user_instances')
+        cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM instance_users')
         results = cursor.fetchall()
         conn.close()
         
@@ -272,11 +331,11 @@ def assign_instance():
         instance_name = next((tag['Value'] for tag in instance_name if tag['Key'] == 'Name'), data['instance_id'])
         
         # Create mapping
-        create_user_instance_mapping(
-            data['slack_user_id'],
-            data['slack_username'],
+        create_instance_user_mapping(
             data['instance_id'],
-            instance_name
+            instance_name,
+            data['slack_user_id'],
+            data['slack_username']
         )
         
         return jsonify({
@@ -298,7 +357,7 @@ def remove_assignment(slack_user_id):
         db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
+        cursor.execute('DELETE FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
         deleted = cursor.rowcount
         conn.commit()
         conn.close()
@@ -322,6 +381,194 @@ def get_instance_status_api(instance_id):
             return jsonify({"error": "Instance not found"}), 404
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# Simulation endpoints for testing Slack-like requests
+@app.route('/api/simulate/slack/start', methods=['POST'])
+def simulate_slack_start():
+    """Simulate a Slack /ec2-start command"""
+    data = request.get_json()
+    if not data or 'user_id' not in data:
+        return jsonify({"error": "Missing user_id"}), 400
+    
+    user_id = data['user_id']
+    
+    # Get user's instance
+    user_instance = get_instance_for_user(user_id)
+    if not user_instance:
+        return jsonify({
+            "response": f"You don't have an EC2 instance assigned yet. Please contact an administrator.",
+            "success": False
+        })
+    
+    instance_id, instance_name = user_instance
+    
+    try:
+        current_status = get_instance_status(instance_id)
+        if current_status == 'running':
+            return jsonify({
+                "response": f"Your instance {instance_name} ({instance_id}) is already running!",
+                "success": True,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+        elif current_status == 'stopped':
+            new_status = start_instance(instance_id)
+            return jsonify({
+                "response": f"Starting your instance {instance_name} ({instance_id})...",
+                "success": True,
+                "instance_id": instance_id,
+                "old_status": current_status,
+                "new_status": new_status
+            })
+        else:
+            return jsonify({
+                "response": f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be stopped before starting.",
+                "success": False,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+    except Exception as e:
+        return jsonify({
+            "response": f"Error starting your instance: {str(e)}",
+            "success": False,
+            "error": str(e)
+        })
+
+@app.route('/api/simulate/slack/stop', methods=['POST'])
+def simulate_slack_stop():
+    """Simulate a Slack /ec2-stop command"""
+    data = request.get_json()
+    if not data or 'user_id' not in data:
+        return jsonify({"error": "Missing user_id"}), 400
+    
+    user_id = data['user_id']
+    
+    # Get user's instance
+    user_instance = get_instance_for_user(user_id)
+    if not user_instance:
+        return jsonify({
+            "response": f"You don't have an EC2 instance assigned yet. Please contact an administrator.",
+            "success": False
+        })
+    
+    instance_id, instance_name = user_instance
+    
+    try:
+        current_status = get_instance_status(instance_id)
+        if current_status == 'stopped':
+            return jsonify({
+                "response": f"Your instance {instance_name} ({instance_id}) is already stopped!",
+                "success": True,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+        elif current_status == 'running':
+            new_status = stop_instance(instance_id)
+            return jsonify({
+                "response": f"Stopping your instance {instance_name} ({instance_id})...",
+                "success": True,
+                "instance_id": instance_id,
+                "old_status": current_status,
+                "new_status": new_status
+            })
+        else:
+            return jsonify({
+                "response": f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be running before stopping.",
+                "success": False,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+    except Exception as e:
+        return jsonify({
+            "response": f"Error stopping your instance: {str(e)}",
+            "success": False,
+            "error": str(e)
+        })
+
+@app.route('/api/simulate/slack/status', methods=['POST'])
+def simulate_slack_status():
+    """Simulate a Slack /ec2-status command"""
+    data = request.get_json()
+    if not data or 'user_id' not in data:
+        return jsonify({"error": "Missing user_id"}), 400
+    
+    user_id = data['user_id']
+    
+    # Get user's instance
+    user_instance = get_instance_for_user(user_id)
+    if not user_instance:
+        return jsonify({
+            "response": f"You don't have an EC2 instance assigned yet. Please contact an administrator.",
+            "success": False
+        })
+    
+    instance_id, instance_name = user_instance
+    
+    try:
+        current_status = get_instance_status(instance_id)
+        return jsonify({
+            "response": f"Your instance {instance_name} ({instance_id}) is currently {current_status}.",
+            "success": True,
+            "instance_id": instance_id,
+            "status": current_status
+        })
+    except Exception as e:
+        return jsonify({
+            "response": f"Error getting instance status: {str(e)}",
+            "success": False,
+            "error": str(e)
+        })
+
+@app.route('/api/simulate/slack/start-specific', methods=['POST'])
+def simulate_slack_start_specific():
+    """Simulate a Slack command to start a specific instance (tests permissions)"""
+    data = request.get_json()
+    if not data or 'user_id' not in data or 'instance_id' not in data:
+        return jsonify({"error": "Missing user_id or instance_id"}), 400
+    
+    user_id = data['user_id']
+    instance_id = data['instance_id']
+    
+    # Check if user can control this instance
+    if not can_user_control_instance(user_id, instance_id):
+        return jsonify({
+            "response": f"You don't have permission to control instance {instance_id}.",
+            "success": False,
+            "instance_id": instance_id,
+            "user_id": user_id
+        })
+    
+    try:
+        current_status = get_instance_status(instance_id)
+        if current_status == 'running':
+            return jsonify({
+                "response": f"Instance {instance_id} is already running!",
+                "success": True,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+        elif current_status == 'stopped':
+            new_status = start_instance(instance_id)
+            return jsonify({
+                "response": f"Starting instance {instance_id}...",
+                "success": True,
+                "instance_id": instance_id,
+                "old_status": current_status,
+                "new_status": new_status
+            })
+        else:
+            return jsonify({
+                "response": f"Instance {instance_id} is in {current_status} state. Please wait for it to be stopped before starting.",
+                "success": False,
+                "instance_id": instance_id,
+                "status": current_status
+            })
+    except Exception as e:
+        return jsonify({
+            "response": f"Error starting instance {instance_id}: {str(e)}",
+            "success": False,
+            "error": str(e)
+        })
 
 # Slack request handler
 @app.route("/slack/events", methods=["POST"])
