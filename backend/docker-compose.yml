@@ -13,12 +13,6 @@ services:
     volumes:
       - ./data:/app/data
     restart: unless-stopped
-    command: >
-      sh -c "
-        mkdir -p /app/data &&
-        chmod 777 /app/data &&
-        gunicorn --bind 0.0.0.0:5000 --workers 2 app:app
-      "
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s
