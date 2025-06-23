@@ -10,6 +10,24 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🚀 EC2 Slack Bot - Complete Test Suite${NC}"
 echo "=========================================="
 
+# Function to check if docker-compose or docker compose is available
+check_docker_compose() {
+    if command -v docker-compose &> /dev/null; then
+        echo "docker-compose"
+    elif docker compose version &> /dev/null; then
+        echo "docker compose"
+    else
+        echo "none"
+    fi
+}
+
+DOCKER_COMPOSE_CMD=$(check_docker_compose)
+
+if [ "$DOCKER_COMPOSE_CMD" = "none" ]; then
+    echo -e "${RED}❌ Neither docker-compose nor docker compose found${NC}"
+    exit 1
+fi
+
 # Function to run a test and check result
 run_test() {
     local test_name="$1"
@@ -44,10 +62,10 @@ echo -e "\n${BLUE}Phase 2: Simulation Tests${NC}"
 echo "Starting container in test mode..."
 
 # Stop any existing containers
-docker-compose down > /dev/null 2>&1
+$DOCKER_COMPOSE_CMD down > /dev/null 2>&1
 
 # Start with test mode
-TEST_MODE=true docker-compose up -d
+TEST_MODE=true $DOCKER_COMPOSE_CMD up -d
 
 # Wait for container to be ready
 echo "Waiting for container to start..."
@@ -62,7 +80,7 @@ fi
 
 # Cleanup
 echo -e "\n${YELLOW}Cleaning up...${NC}"
-docker-compose down
+$DOCKER_COMPOSE_CMD down
 
 # Final results
 echo -e "\n${BLUE}Test Results Summary${NC}"
