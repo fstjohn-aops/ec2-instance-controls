@@ -1,6 +1,0 @@
-# Prevent Cursor from indexing or caring about these files.
-
-**/node_modules
-**/.next
-**/.swc
-**/.eslintcache

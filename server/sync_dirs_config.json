@@ -1,9 +1,0 @@
-[
-	{
-		"src": "src/shared",
-		"dest": "../nextjs/lib/shared",
-		"exclude": ["README.md", "**/*.test.*"],
-		"codegenBanner": true,
-		"root": ".."
-	}
-]

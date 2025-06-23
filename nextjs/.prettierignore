@@ -1,7 +1,0 @@
-tsout
-*.yml
-*.yaml
-package.json
-package-lock.json
-.eslintrc.json
-.prettierignore

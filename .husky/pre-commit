@@ -1,5 +1,0 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
-# (echo "server lint-staged" && cd ./server && ./node_modules/.bin/lint-staged --concurrent false)
-(echo "nextjs lint-staged" && cd ./nextjs && ./node_modules/.bin/lint-staged --concurrent false)

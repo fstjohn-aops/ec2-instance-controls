@@ -1,8 +1,0 @@
----
-description: 
-globs: *.jsx,*.tsx
-alwaysApply: false
----
-## **Component Styling**:
-- Each component should have **at most one SCSS module** for styling.
-- SCSS files should be named appropriately based on the component they style, e.g., `ComponentName.module.scss`.
