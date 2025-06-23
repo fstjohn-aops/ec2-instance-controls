@@ -128,8 +128,55 @@ else
     echo "Response: $response"
 fi
 
+# Test with real instance IDs
+echo -e "\n${YELLOW}8. Testing with real instance IDs...${NC}"
+
+# Array of real instance IDs for testing (add more as needed)
+REAL_INSTANCE_IDS=(
+    "i-0ecdfc9a2e3e53302"  # Your server instance (be careful!)
+    # "i-1234567890abcdef0"  # Add more instances here
+    # "i-0987654321fedcba0"  # Add more instances here
+)
+
+for instance_id in "${REAL_INSTANCE_IDS[@]}"; do
+    echo "Testing instance status for $instance_id..."
+    response=$(curl -s http://localhost:5000/api/instances/$instance_id/status)
+    if echo "$response" | grep -q "status"; then
+        echo -e "${GREEN}✅ Instance $instance_id status retrieved successfully${NC}"
+        echo "  Status: $(echo $response | grep -o '"status":"[^"]*"' | cut -d'"' -f4)"
+    else
+        echo -e "${RED}❌ Failed to get status for instance $instance_id${NC}"
+        echo "  Response: $response"
+    fi
+done
+
+# Test assigning a real instance (using the first one in the array)
+if [ ${#REAL_INSTANCE_IDS[@]} -gt 0 ]; then
+    first_instance=${REAL_INSTANCE_IDS[0]}
+    echo "Testing assignment of real instance $first_instance..."
+    response=$(curl -s -X POST http://localhost:5000/api/assign-instance \
+      -H "Content-Type: application/json" \
+      -d "{\"slack_user_id\":\"U123\",\"slack_username\":\"test-user\",\"instance_id\":\"$first_instance\"}")
+    
+    if echo "$response" | grep -q "Instance assigned successfully"; then
+        echo -e "${GREEN}✅ Successfully assigned instance $first_instance to test user${NC}"
+        
+        # Verify the assignment was created
+        echo "Verifying assignment in database..."
+        assignments_response=$(curl -s http://localhost:5000/api/assignments)
+        if echo "$assignments_response" | grep -q "$first_instance"; then
+            echo -e "${GREEN}✅ Assignment verified in database${NC}"
+        else
+            echo -e "${RED}❌ Assignment not found in database${NC}"
+        fi
+    else
+        echo -e "${RED}❌ Failed to assign instance $first_instance${NC}"
+        echo "  Response: $response"
+    fi
+fi
+
 # Test database creation
-echo -e "\n${YELLOW}8. Checking database creation...${NC}"
+echo -e "\n${YELLOW}9. Checking database creation...${NC}"
 if [ -f ec2_instances.db ]; then
     echo -e "${GREEN}✅ Database file created${NC}"
 else
@@ -137,7 +184,7 @@ else
 fi
 
 # Test container logs
-echo -e "\n${YELLOW}9. Checking container logs...${NC}"
+echo -e "\n${YELLOW}10. Checking container logs...${NC}"
 if docker-compose logs | grep -q "Running on"; then
     echo -e "${GREEN}✅ Application started successfully${NC}"
 else
@@ -146,7 +193,7 @@ else
 fi
 
 # Cleanup
-echo -e "\n${YELLOW}10. Cleaning up...${NC}"
+echo -e "\n${YELLOW}11. Cleaning up...${NC}"
 docker-compose down
 echo -e "${GREEN}✅ Container stopped${NC}"
 
