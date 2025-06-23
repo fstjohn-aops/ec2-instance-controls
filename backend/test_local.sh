@@ -177,7 +177,7 @@ fi
 
 # Test database creation
 echo -e "\n${YELLOW}9. Checking database creation...${NC}"
-if [ -f ec2_instances.db ]; then
+if [ -f data/ec2_instances.db ]; then
     echo -e "${GREEN}✅ Database file created${NC}"
 else
     echo -e "${RED}❌ Database file not created${NC}"

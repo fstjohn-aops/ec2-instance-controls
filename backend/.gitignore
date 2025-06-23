@@ -3,6 +3,7 @@
 *.env
 
 # Database
+data/
 *.db
 *.sqlite
 *.sqlite3

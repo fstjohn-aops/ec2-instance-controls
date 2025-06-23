@@ -55,7 +55,11 @@ MOCK_INSTANCE_STATES = {
 def init_db():
     """Initialize SQLite database with instance-user mappings"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        # Create data directory if it doesn't exist
+        data_dir = os.path.join(os.getcwd(), 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -78,7 +82,8 @@ def init_db():
 def get_instance_for_user(slack_user_id):
     """Get instance ID for a given Slack user"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT instance_id, instance_name FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
@@ -92,7 +97,8 @@ def get_instance_for_user(slack_user_id):
 def get_users_for_instance(instance_id):
     """Get all users that can control a given instance"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT slack_user_id, slack_username FROM instance_users WHERE instance_id = ?', (instance_id,))
@@ -106,7 +112,9 @@ def get_users_for_instance(instance_id):
 def create_instance_user_mapping(instance_id, instance_name, slack_user_id, slack_username):
     """Create or update instance-user mapping"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        os.makedirs(data_dir, exist_ok=True)
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -123,7 +131,8 @@ def create_instance_user_mapping(instance_id, instance_name, slack_user_id, slac
 def can_user_control_instance(slack_user_id, instance_id):
     """Check if a user can control a specific instance"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT 1 FROM instance_users WHERE slack_user_id = ? AND instance_id = ?', (slack_user_id, instance_id))
@@ -291,7 +300,8 @@ def health_check():
 def list_assignments():
     """List all user-instance assignments"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM instance_users')
@@ -322,13 +332,18 @@ def assign_instance():
         return jsonify({"error": "Missing required fields: slack_user_id, slack_username, instance_id"}), 400
     
     try:
-        # Verify instance exists
-        response = ec2_client.describe_instances(InstanceIds=[data['instance_id']])
-        if not response['Reservations']:
-            return jsonify({"error": "Instance not found"}), 404
+        instance_name = data.get('instance_name', data['instance_id'])
         
-        instance_name = response['Reservations'][0]['Instances'][0].get('Tags', [])
-        instance_name = next((tag['Value'] for tag in instance_name if tag['Key'] == 'Name'), data['instance_id'])
+        # In test mode, skip AWS validation for test instances
+        if not TEST_MODE or not data['instance_id'].startswith('i-test-'):
+            # Verify instance exists in AWS
+            response = ec2_client.describe_instances(InstanceIds=[data['instance_id']])
+            if not response['Reservations']:
+                return jsonify({"error": "Instance not found"}), 404
+            
+            # Get instance name from AWS tags
+            instance_tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
+            instance_name = next((tag['Value'] for tag in instance_tags if tag['Key'] == 'Name'), data['instance_id'])
         
         # Create mapping
         create_instance_user_mapping(
@@ -354,7 +369,8 @@ def assign_instance():
 def remove_assignment(slack_user_id):
     """Remove user-instance assignment"""
     try:
-        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        data_dir = os.path.join(os.getcwd(), 'data')
+        db_path = os.path.join(data_dir, 'ec2_instances.db')
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
