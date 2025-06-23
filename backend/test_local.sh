@@ -51,7 +51,7 @@ echo -e "${GREEN}✅ All environment variables are set${NC}"
 # Build and start the container
 echo -e "\n${YELLOW}4. Building and starting container...${NC}"
 docker-compose up --build -d
-sleep 10
+sleep 15
 
 # Check if container is running
 echo -e "\n${YELLOW}5. Checking container status...${NC}"
@@ -64,12 +64,22 @@ echo -e "${GREEN}✅ Container is running${NC}"
 
 # Test health endpoint
 echo -e "\n${YELLOW}6. Testing health endpoint...${NC}"
-if curl -f http://localhost:5000/health > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Health endpoint is working${NC}"
-else
-    echo -e "${RED}❌ Health endpoint failed${NC}"
-    exit 1
-fi
+# Try multiple times with increasing delays
+for i in {1..5}; do
+    if curl -f http://localhost:5000/health > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Health endpoint is working${NC}"
+        break
+    else
+        if [ $i -eq 5 ]; then
+            echo -e "${RED}❌ Health endpoint failed after 5 attempts${NC}"
+            echo "Container logs:"
+            docker-compose logs
+            exit 1
+        fi
+        echo "Attempt $i failed, waiting 3 seconds..."
+        sleep 3
+    fi
+done
 
 # Test API endpoints
 echo -e "\n${YELLOW}7. Testing API endpoints...${NC}"
