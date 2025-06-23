@@ -276,6 +276,26 @@ curl -X POST http://localhost:5000/api/assign-instance \
   -d '{"slack_user_id":"U123","slack_username":"test","instance_id":"i-123"}'
 ```
 
+### Automated Testing
+
+Before getting Slack app access, you can run comprehensive local tests:
+
+```bash
+# Run the test script
+./test_local.sh
+```
+
+This script tests:
+- Docker environment setup
+- Environment variable validation
+- Container startup and health checks
+- API endpoint functionality
+- Error handling with invalid data
+- Database creation
+- Application logs
+
+The test script validates everything except Slack integration, so you can ensure your setup works before asking your admin to install the Slack app.
+
 ## Security Considerations
 
 1. **Use IAM roles** instead of access keys in production
