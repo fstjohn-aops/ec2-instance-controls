@@ -43,42 +43,57 @@ ec2_client = boto3.client('ec2', region_name=os.environ.get('AWS_REGION', 'us-ea
 # Database setup
 def init_db():
     """Initialize SQLite database with user-instance mappings"""
-    conn = sqlite3.connect('ec2_instances.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_instances (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            slack_user_id TEXT UNIQUE NOT NULL,
-            slack_username TEXT NOT NULL,
-            instance_id TEXT UNIQUE NOT NULL,
-            instance_name TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_instances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slack_user_id TEXT UNIQUE NOT NULL,
+                slack_username TEXT NOT NULL,
+                instance_id TEXT UNIQUE NOT NULL,
+                instance_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        logger.info(f"Database initialized at {db_path}")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
 
 def get_user_instance(slack_user_id):
     """Get instance ID for a given Slack user"""
-    conn = sqlite3.connect('ec2_instances.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT instance_id, instance_name FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    return result
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT instance_id, instance_name FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return result
+    except Exception as e:
+        logger.error(f"Database error in get_user_instance: {e}")
+        return None
 
 def create_user_instance_mapping(slack_user_id, slack_username, instance_id, instance_name):
     """Create or update user-instance mapping"""
-    conn = sqlite3.connect('ec2_instances.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        INSERT OR REPLACE INTO user_instances 
-        (slack_user_id, slack_username, instance_id, instance_name, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-    ''', (slack_user_id, slack_username, instance_id, instance_name, datetime.now()))
-    conn.commit()
-    conn.close()
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO user_instances 
+            (slack_user_id, slack_username, instance_id, instance_name, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (slack_user_id, slack_username, instance_id, instance_name, datetime.now()))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Database error in create_user_instance_mapping: {e}")
+        raise
 
 # EC2 instance management functions
 def get_instance_status(instance_id):
@@ -216,23 +231,28 @@ def health_check():
 @app.route('/api/assignments', methods=['GET'])
 def list_assignments():
     """List all user-instance assignments"""
-    conn = sqlite3.connect('ec2_instances.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM user_instances')
-    results = cursor.fetchall()
-    conn.close()
-    
-    assignments = []
-    for row in results:
-        assignments.append({
-            'slack_user_id': row[0],
-            'slack_username': row[1],
-            'instance_id': row[2],
-            'instance_name': row[3],
-            'created_at': row[4]
-        })
-    
-    return jsonify(assignments)
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM user_instances')
+        results = cursor.fetchall()
+        conn.close()
+        
+        assignments = []
+        for row in results:
+            assignments.append({
+                'slack_user_id': row[0],
+                'slack_username': row[1],
+                'instance_id': row[2],
+                'instance_name': row[3],
+                'created_at': row[4]
+            })
+        
+        return jsonify(assignments)
+    except Exception as e:
+        logger.error(f"Error in list_assignments: {e}")
+        return jsonify({"error": "Database error", "details": str(e)}), 500
 
 @app.route('/api/assign-instance', methods=['POST'])
 def assign_instance():
@@ -274,17 +294,22 @@ def assign_instance():
 @app.route('/api/assignments/<slack_user_id>', methods=['DELETE'])
 def remove_assignment(slack_user_id):
     """Remove user-instance assignment"""
-    conn = sqlite3.connect('ec2_instances.db')
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
-    deleted = cursor.rowcount
-    conn.commit()
-    conn.close()
-    
-    if deleted:
-        return jsonify({"message": "Assignment removed successfully"})
-    else:
-        return jsonify({"error": "Assignment not found"}), 404
+    try:
+        db_path = os.path.join(os.getcwd(), 'ec2_instances.db')
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM user_instances WHERE slack_user_id = ?', (slack_user_id,))
+        deleted = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        if deleted:
+            return jsonify({"message": "Assignment removed successfully"})
+        else:
+            return jsonify({"error": "Assignment not found"}), 404
+    except Exception as e:
+        logger.error(f"Error in remove_assignment: {e}")
+        return jsonify({"error": "Database error", "details": str(e)}), 500
 
 @app.route('/api/instances/<instance_id>/status', methods=['GET'])
 def get_instance_status_api(instance_id):
