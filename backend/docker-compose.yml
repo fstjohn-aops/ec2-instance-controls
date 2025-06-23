@@ -12,6 +12,7 @@ services:
       - TEST_MODE=${TEST_MODE:-false}
     volumes:
       - ./data:/app/data
+    user: "1000:1000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]

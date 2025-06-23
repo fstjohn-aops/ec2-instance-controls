@@ -78,97 +78,65 @@ echo
 
 # Test 1: Alice tries to start her assigned instance
 echo "Test 1: Alice tries to start her assigned instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U123",
-        "command": "/ec2-start",
-        "text": ""
-    }')
+    -d '{"user_id": "U123"}')
 echo "Response: $response"
 echo
 
 # Test 2: Bob tries to stop his assigned instance
 echo "Test 2: Bob tries to stop his assigned instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/stop \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U456",
-        "command": "/ec2-stop",
-        "text": ""
-    }')
+    -d '{"user_id": "U456"}')
 echo "Response: $response"
 echo
 
 # Test 3: Charlie checks status of his assigned instance
 echo "Test 3: Charlie checks status of his assigned instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/status \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U789",
-        "command": "/ec2-status",
-        "text": ""
-    }')
+    -d '{"user_id": "U789"}')
 echo "Response: $response"
 echo
 
 # Test 4: User without assignment tries to start instance
 echo "Test 4: User without assignment tries to start instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U000",
-        "command": "/ec2-start",
-        "text": ""
-    }')
+    -d '{"user_id": "U000"}')
 echo "Response: $response"
 echo
 
 # Test 5: Alice tries to start her already running instance
 echo "Test 5: Alice tries to start her already running instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U123",
-        "command": "/ec2-start",
-        "text": ""
-    }')
+    -d '{"user_id": "U123"}')
 echo "Response: $response"
 echo
 
 # Test 6: Alice tries to start Bob's instance (permission test)
 echo "Test 6: Alice tries to start Bob's instance (permission test)"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start-specific \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U123",
-        "command": "/ec2-start",
-        "text": "i-test-instance-2"
-    }')
+    -d '{"user_id": "U123", "instance_id": "i-test-instance-2"}')
 echo "Response: $response"
 echo
 
 # Test 7: Alice tries to start her own instance (permission test)
 echo "Test 7: Alice tries to start her own instance (permission test)"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start-specific \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U123",
-        "command": "/ec2-start",
-        "text": "i-test-instance-1"
-    }')
+    -d '{"user_id": "U123", "instance_id": "i-test-instance-1"}')
 echo "Response: $response"
 echo
 
 # Test 8: Admin tries to start the server instance
 echo "Test 8: Admin tries to start the server instance"
-response=$(curl -s -X POST http://localhost:5000/api/slack/command \
+response=$(curl -s -X POST http://localhost:5000/api/simulate/slack/start-specific \
     -H "Content-Type: application/json" \
-    -d '{
-        "user_id": "U999",
-        "command": "/ec2-start",
-        "text": "i-0ecdfc9a2e3e53302"
-    }')
+    -d '{"user_id": "U999", "instance_id": "i-0ecdfc9a2e3e53302"}')
 echo "Response: $response"
 echo
 
