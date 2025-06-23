@@ -96,67 +96,93 @@ def stop_instance(instance_id):
         logger.error(f"Error stopping instance: {e}")
         raise
 
-# Slack bot event handlers
-@slack_app.event("app_mention")
-def handle_mention(event, say):
-    """Handle when the bot is mentioned"""
-    user_id = event['user']
-    text = event['text'].lower()
+# Slack slash command handlers
+@slack_app.command("/ec2-start")
+def handle_start_command(ack, respond, command):
+    """Handle /ec2-start command"""
+    ack()
+    user_id = command['user_id']
+    username = command['user_name']
     
     # Get user's instance
     user_instance = get_user_instance(user_id)
     if not user_instance:
-        say(f"<@{user_id}> You don't have an EC2 instance assigned yet. Please contact an administrator.")
+        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
         return
     
     instance_id, instance_name = user_instance
     
-    if 'start' in text or 'turn on' in text:
-        try:
-            current_status = get_instance_status(instance_id)
-            if current_status == 'running':
-                say(f"<@{user_id}> Your instance {instance_name} ({instance_id}) is already running!")
-            elif current_status == 'stopped':
-                start_instance(instance_id)
-                say(f"<@{user_id}> Starting your instance {instance_name} ({instance_id})...")
-            else:
-                say(f"<@{user_id}> Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be stopped before starting.")
-        except Exception as e:
-            say(f"<@{user_id}> Error starting your instance: {str(e)}")
+    try:
+        current_status = get_instance_status(instance_id)
+        if current_status == 'running':
+            respond(f"Your instance {instance_name} ({instance_id}) is already running!")
+        elif current_status == 'stopped':
+            start_instance(instance_id)
+            respond(f"Starting your instance {instance_name} ({instance_id})...")
+        else:
+            respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be stopped before starting.")
+    except Exception as e:
+        respond(f"Error starting your instance: {str(e)}")
+
+@slack_app.command("/ec2-stop")
+def handle_stop_command(ack, respond, command):
+    """Handle /ec2-stop command"""
+    ack()
+    user_id = command['user_id']
+    username = command['user_name']
     
-    elif 'stop' in text or 'turn off' in text:
-        try:
-            current_status = get_instance_status(instance_id)
-            if current_status == 'stopped':
-                say(f"<@{user_id}> Your instance {instance_name} ({instance_id}) is already stopped!")
-            elif current_status == 'running':
-                stop_instance(instance_id)
-                say(f"<@{user_id}> Stopping your instance {instance_name} ({instance_id})...")
-            else:
-                say(f"<@{user_id}> Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be running before stopping.")
-        except Exception as e:
-            say(f"<@{user_id}> Error stopping your instance: {str(e)}")
+    # Get user's instance
+    user_instance = get_user_instance(user_id)
+    if not user_instance:
+        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
+        return
     
-    elif 'status' in text:
-        try:
-            current_status = get_instance_status(instance_id)
-            say(f"<@{user_id}> Your instance {instance_name} ({instance_id}) is currently {current_status}.")
-        except Exception as e:
-            say(f"<@{user_id}> Error getting instance status: {str(e)}")
+    instance_id, instance_name = user_instance
     
-    else:
-        say(f"<@{user_id}> Available commands: start/stop/status. Example: @bot start my instance")
+    try:
+        current_status = get_instance_status(instance_id)
+        if current_status == 'stopped':
+            respond(f"Your instance {instance_name} ({instance_id}) is already stopped!")
+        elif current_status == 'running':
+            stop_instance(instance_id)
+            respond(f"Stopping your instance {instance_name} ({instance_id})...")
+        else:
+            respond(f"Your instance {instance_name} ({instance_id}) is in {current_status} state. Please wait for it to be running before stopping.")
+    except Exception as e:
+        respond(f"Error stopping your instance: {str(e)}")
+
+@slack_app.command("/ec2-status")
+def handle_status_command(ack, respond, command):
+    """Handle /ec2-status command"""
+    ack()
+    user_id = command['user_id']
+    username = command['user_name']
+    
+    # Get user's instance
+    user_instance = get_user_instance(user_id)
+    if not user_instance:
+        respond(f"You don't have an EC2 instance assigned yet. Please contact an administrator.")
+        return
+    
+    instance_id, instance_name = user_instance
+    
+    try:
+        current_status = get_instance_status(instance_id)
+        respond(f"Your instance {instance_name} ({instance_id}) is currently {current_status}.")
+    except Exception as e:
+        respond(f"Error getting instance status: {str(e)}")
 
 @slack_app.command("/ec2-help")
 def handle_help_command(ack, respond):
-    """Handle help command"""
+    """Handle /ec2-help command"""
     ack()
     help_text = """
-*EC2 Instance Control Bot Commands*
+*EC2 Instance Control Commands*
 
-• *Start your instance*: `@bot start` or `@bot turn on`
-• *Stop your instance*: `@bot stop` or `@bot turn off`  
-• *Check status*: `@bot status`
+• `/ec2-start` - Start your assigned instance
+• `/ec2-stop` - Stop your assigned instance  
+• `/ec2-status` - Check instance status
+• `/ec2-help` - Show this help message
 
 *Admin Commands* (via API):
 • Assign instance to user: `POST /api/assign-instance`
