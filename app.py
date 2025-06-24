@@ -31,7 +31,12 @@ def slack_test():
 @app.route('/admin/check', methods=['POST'])
 def admin_check():
     user_id = request.form.get('user_id', '')
-    return "yes" if user_id in ADMIN_USERS else "no"
+    user_name = request.form.get('user_name', 'Unknown')
+    
+    if user_id in ADMIN_USERS:
+        return f"User: {user_name} is an administrator"
+    else:
+        return f"User: {user_name} is not an administrator"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True) 
