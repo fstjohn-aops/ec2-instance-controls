@@ -42,6 +42,9 @@ class TestDatabaseOperations:
         """Test creating instance-user mapping"""
         os.environ['TEST_DB_PATH'] = test_db_path
         
+        # Initialize the database first
+        init_db()
+        
         # Create mapping
         create_instance_user_mapping(
             instance_id='i-test-1',
@@ -71,6 +74,9 @@ class TestDatabaseOperations:
         """Test getting instance for a user"""
         os.environ['TEST_DB_PATH'] = test_db_path
         
+        # Initialize the database first
+        init_db()
+        
         # Create test data
         create_instance_user_mapping(
             instance_id='i-test-1',
@@ -90,6 +96,9 @@ class TestDatabaseOperations:
         """Test getting instance for non-existent user"""
         os.environ['TEST_DB_PATH'] = test_db_path
         
+        # Initialize the database first
+        init_db()
+        
         result = get_instance_for_user('U999')
         assert result is None
     
@@ -97,13 +106,18 @@ class TestDatabaseOperations:
         """Test getting users for an instance"""
         os.environ['TEST_DB_PATH'] = test_db_path
         
-        # Create test data
+        # Initialize the database first
+        init_db()
+        
+        # Create test data - since instance_id is UNIQUE, only one user per instance
         create_instance_user_mapping(
             instance_id='i-test-1',
             instance_name='Test Instance',
             slack_user_id='U123',
             slack_username='user1'
         )
+        
+        # Try to add another user to the same instance - this should replace the first one
         create_instance_user_mapping(
             instance_id='i-test-1',
             instance_name='Test Instance',
@@ -111,21 +125,19 @@ class TestDatabaseOperations:
             slack_username='user2'
         )
         
-        # Get users for instance
+        # Get users for instance - should only return the last assigned user
         results = get_users_for_instance('i-test-1')
         
-        assert len(results) == 2
-        user_ids = [result[0] for result in results]
-        usernames = [result[1] for result in results]
-        
-        assert 'U123' in user_ids
-        assert 'U456' in user_ids
-        assert 'user1' in usernames
-        assert 'user2' in usernames
+        assert len(results) == 1  # Only one user per instance due to UNIQUE constraint
+        assert results[0][0] == 'U456'  # Should be the last assigned user
+        assert results[0][1] == 'user2'
     
     def test_can_user_control_instance(self, test_db_path):
         """Test checking if user can control instance"""
         os.environ['TEST_DB_PATH'] = test_db_path
+        
+        # Initialize the database first
+        init_db()
         
         # Create test data
         create_instance_user_mapping(
@@ -147,6 +159,9 @@ class TestDatabaseOperations:
     def test_update_existing_mapping(self, test_db_path):
         """Test updating existing instance-user mapping"""
         os.environ['TEST_DB_PATH'] = test_db_path
+        
+        # Initialize the database first
+        init_db()
         
         # Create initial mapping
         create_instance_user_mapping(

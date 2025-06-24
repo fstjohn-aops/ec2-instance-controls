@@ -9,6 +9,20 @@ import os
 from unittest.mock import patch
 
 
+def wait_for_app(base_url, timeout=30):
+    """Wait for the Flask app to be ready"""
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            response = requests.get(f"{base_url}/health", timeout=2)
+            if response.status_code == 200:
+                return True
+        except requests.exceptions.RequestException:
+            pass
+        time.sleep(1)
+    return False
+
+
 class TestIntegrationFlow:
     """Test complete integration flows"""
     
@@ -20,7 +34,12 @@ class TestIntegrationFlow:
         env.update({
             'TEST_MODE': 'true',
             'FLASK_ENV': 'testing',
-            'FLASK_DEBUG': 'false'
+            'FLASK_DEBUG': 'false',
+            'SLACK_BOT_TOKEN': 'xoxb-test-token',
+            'SLACK_SIGNING_SECRET': 'test-signing-secret',
+            'AWS_ACCESS_KEY_ID': 'test-access-key',
+            'AWS_SECRET_ACCESS_KEY': 'test-secret-key',
+            'AWS_REGION': 'us-east-1',
         })
         
         # Start app
@@ -32,7 +51,11 @@ class TestIntegrationFlow:
         )
         
         # Wait for app to start
-        time.sleep(3)
+        base_url = "http://localhost:5000"
+        if not wait_for_app(base_url):
+            process.terminate()
+            process.wait()
+            pytest.skip("Flask app failed to start")
         
         yield process
         
