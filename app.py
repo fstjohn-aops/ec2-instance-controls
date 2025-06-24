@@ -34,9 +34,14 @@ def admin_check():
     user_name = request.form.get('user_name', 'Unknown')
     
     if user_id in ADMIN_USERS:
-        return f"User: {user_name} is an administrator"
+        message = f"User: `{user_name}` is an administrator."
     else:
-        return f"User: {user_name} is not an administrator"
+        message = f"User: `{user_name}` is not an administrator."
+    
+    return jsonify({
+        'response_type': 'ephemeral',
+        'text': message
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True) 
