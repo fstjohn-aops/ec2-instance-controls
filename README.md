@@ -1,68 +1,35 @@
 # EC2 Instance Control App
 
-A simple Flask application for managing EC2 instances via REST API.
+Simple Flask app for managing EC2 instances.
 
-## Features
+## Setup
 
-- List EC2 instances
-- Get instance status
-- Start/stop instances
-- Manage instance-user assignments
-- Health check endpoint
-
-## Quick Start
-
-### Local Development
-
-1. Install dependencies:
+1. Copy environment file:
    ```bash
-   pip install -r requirements.txt
+   cp env.example .env
    ```
 
-2. Run the application:
+2. Add your AWS credentials to `.env`:
    ```bash
-   ./run.sh
+   AWS_ACCESS_KEY_ID=your_key
+   AWS_SECRET_ACCESS_KEY=your_secret
    ```
-   Or manually:
+
+3. Run:
    ```bash
    python3 app.py
+   # or
+   docker-compose up
    ```
 
-3. Run tests:
-   ```bash
-   ./test.sh
-   ```
-
-### Docker
-
-1. Build and run with Docker Compose:
-   ```bash
-   docker-compose up --build
-   ```
-
-2. Or build and run manually:
-   ```bash
-   docker build -t ec2-control-app .
-   docker run -p 8000:8000 ec2-control-app
-   ```
-
-## API Endpoints
+## Endpoints
 
 - `GET /health` - Health check
-- `GET /api/instances` - List all instances
-- `GET /api/instances/{id}/status` - Get instance status
+- `GET /api/instances` - List instances
 - `POST /api/instances/{id}/start` - Start instance
 - `POST /api/instances/{id}/stop` - Stop instance
-- `GET /api/assignments` - List assignments
-- `POST /api/assignments` - Create assignment
-- `DELETE /api/assignments/{user_id}` - Delete assignment
+- `POST /api/slack/test` - Test Slack data (logs everything)
 
-## Environment Variables
+## Test Slack
 
-- `PORT` - Server port (default: 8000)
-- `TEST_MODE` - Enable test mode (default: false)
-- `DB_PATH` - SQLite database path (default: instances.db)
-
-## Test Mode
-
-Set `TEST_MODE=true` to use mock data instead of real AWS calls. 
+Point your Slack app to `http://your-server:8000/api/slack/test` and check the logs to see what data Slack sends. 

@@ -12,5 +12,4 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# Run the Flask application
 python3 app.py 

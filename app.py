@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
 """
 Simple EC2 Instance Control Flask App
-A minimal Flask application for managing EC2 instances via REST API
 """
 
 import os
 import json
-import sqlite3
 import logging
-from datetime import datetime
 from flask import Flask, request, jsonify
-from typing import Dict, List, Optional
+from dotenv import load_dotenv
 
-# Configure logging
+load_dotenv()
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -20,233 +18,104 @@ app = Flask(__name__)
 
 # Configuration
 PORT = int(os.environ.get('PORT', 8000))
-TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
-DB_PATH = os.environ.get('DB_PATH', 'instances.db')
+AWS_REGION = os.environ.get('AWS_REGION', 'us-west-2')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
 
-# Mock data for test mode
-MOCK_INSTANCES = {
-    'i-test-1': {'state': 'running', 'name': 'Test Instance 1'},
-    'i-test-2': {'state': 'stopped', 'name': 'Test Instance 2'},
-    'i-test-3': {'state': 'running', 'name': 'Test Instance 3'}
-}
-
-def init_db():
-    """Initialize SQLite database"""
+# Initialize AWS client
+ec2_client = None
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS instance_users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                instance_id TEXT UNIQUE NOT NULL,
-                instance_name TEXT,
-                user_id TEXT NOT NULL,
-                username TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        conn.commit()
-        conn.close()
-        logger.info(f"Database initialized at {DB_PATH}")
+        import boto3
+        ec2_client = boto3.client(
+            'ec2',
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        )
+        logger.info("AWS client initialized")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-
-def get_db_connection():
-    """Get database connection"""
-    return sqlite3.connect(DB_PATH)
-
-# Initialize database on startup
-init_db()
-
-def get_instance_status(instance_id: str) -> Optional[str]:
-    """Get instance status (mock implementation)"""
-    if TEST_MODE:
-        return MOCK_INSTANCES.get(instance_id, {}).get('state')
-    
-    # In real implementation, you would use boto3 here
-    # For simplicity, we'll just return a mock status
-    logger.info(f"Getting status for instance {instance_id}")
-    return 'running'  # Mock response
-
-def start_instance(instance_id: str) -> str:
-    """Start an EC2 instance (mock implementation)"""
-    if TEST_MODE:
-        if instance_id in MOCK_INSTANCES:
-            MOCK_INSTANCES[instance_id]['state'] = 'running'
-            logger.info(f"TEST MODE: Started instance {instance_id}")
-            return 'running'
-        return 'unknown'
-    
-    # In real implementation, you would use boto3 here
-    logger.info(f"Starting instance {instance_id}")
-    return 'running'  # Mock response
-
-def stop_instance(instance_id: str) -> str:
-    """Stop an EC2 instance (mock implementation)"""
-    if TEST_MODE:
-        if instance_id in MOCK_INSTANCES:
-            MOCK_INSTANCES[instance_id]['state'] = 'stopped'
-            logger.info(f"TEST MODE: Stopped instance {instance_id}")
-            return 'stopped'
-        return 'unknown'
-    
-    # In real implementation, you would use boto3 here
-    logger.info(f"Stopping instance {instance_id}")
-    return 'stopped'  # Mock response
-
-# API Routes
+        logger.error(f"AWS client failed: {e}")
 
 @app.route('/health')
 def health_check():
     """Health check endpoint"""
     return jsonify({
         'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'test_mode': TEST_MODE
+        'aws_connected': ec2_client is not None
     })
 
 @app.route('/api/instances', methods=['GET'])
 def list_instances():
     """List all instances"""
-    if TEST_MODE:
-        instances = [
-            {'id': instance_id, 'name': data['name'], 'state': data['state']}
-            for instance_id, data in MOCK_INSTANCES.items()
-        ]
-    else:
-        # Mock response for non-test mode
-        instances = [
-            {'id': 'i-1234567890abcdef0', 'name': 'Production Server', 'state': 'running'},
-            {'id': 'i-0987654321fedcba0', 'name': 'Staging Server', 'state': 'stopped'}
-        ]
+    if not ec2_client:
+        return jsonify({'error': 'AWS not configured'}), 500
     
-    return jsonify({'instances': instances})
-
-@app.route('/api/instances/<instance_id>/status', methods=['GET'])
-def get_instance_status_api(instance_id):
-    """Get status of a specific instance"""
-    status = get_instance_status(instance_id)
-    if status is None:
-        return jsonify({'error': 'Instance not found'}), 404
-    
-    return jsonify({
-        'instance_id': instance_id,
-        'status': status
-    })
+    try:
+        response = ec2_client.describe_instances()
+        instances = []
+        
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                name = 'Unnamed'
+                if 'Tags' in instance:
+                    for tag in instance['Tags']:
+                        if tag['Key'] == 'Name':
+                            name = tag['Value']
+                            break
+                
+                instances.append({
+                    'id': instance['InstanceId'],
+                    'name': name,
+                    'state': instance['State']['Name']
+                })
+        
+        return jsonify({'instances': instances})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/instances/<instance_id>/start', methods=['POST'])
-def start_instance_api(instance_id):
-    """Start a specific instance"""
+def start_instance(instance_id):
+    """Start an instance"""
+    if not ec2_client:
+        return jsonify({'error': 'AWS not configured'}), 500
+    
     try:
-        new_status = start_instance(instance_id)
-        return jsonify({
-            'instance_id': instance_id,
-            'status': new_status,
-            'message': f'Instance {instance_id} started successfully'
-        })
+        ec2_client.start_instances(InstanceIds=[instance_id])
+        return jsonify({'message': f'Started {instance_id}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/instances/<instance_id>/stop', methods=['POST'])
-def stop_instance_api(instance_id):
-    """Stop a specific instance"""
+def stop_instance(instance_id):
+    """Stop an instance"""
+    if not ec2_client:
+        return jsonify({'error': 'AWS not configured'}), 500
+    
     try:
-        new_status = stop_instance(instance_id)
-        return jsonify({
-            'instance_id': instance_id,
-            'status': new_status,
-            'message': f'Instance {instance_id} stopped successfully'
-        })
+        ec2_client.stop_instances(InstanceIds=[instance_id])
+        return jsonify({'message': f'Stopped {instance_id}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/assignments', methods=['GET'])
-def list_assignments():
-    """List all instance-user assignments"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            SELECT instance_id, instance_name, user_id, username, created_at
-            FROM instance_users
-            ORDER BY created_at DESC
-        ''')
-        rows = cursor.fetchall()
-        conn.close()
-        
-        assignments = [
-            {
-                'instance_id': row[0],
-                'instance_name': row[1],
-                'user_id': row[2],
-                'username': row[3],
-                'created_at': row[4]
-            }
-            for row in rows
-        ]
-        
-        return jsonify({'assignments': assignments})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/assignments', methods=['POST'])
-def create_assignment():
-    """Create a new instance-user assignment"""
+@app.route('/api/slack/test', methods=['POST'])
+def slack_test():
+    """Test endpoint to see what Slack sends"""
+    logger.info("=== SLACK TEST ENDPOINT CALLED ===")
+    logger.info(f"Headers: {dict(request.headers)}")
+    logger.info(f"Data: {request.get_data(as_text=True)}")
+    
     try:
         data = request.get_json()
-        if not data or not all(k in data for k in ['instance_id', 'user_id', 'username']):
-            return jsonify({'error': 'Missing required fields'}), 400
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO instance_users 
-            (instance_id, instance_name, user_id, username)
-            VALUES (?, ?, ?, ?)
-        ''', (
-            data['instance_id'],
-            data.get('instance_name', ''),
-            data['user_id'],
-            data['username']
-        ))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Assignment created for instance {data["instance_id"]}'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/assignments/<user_id>', methods=['DELETE'])
-def delete_assignment(user_id):
-    """Delete an instance-user assignment"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM instance_users WHERE user_id = ?', (user_id,))
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Assignment deleted for user {user_id}'
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    """Handle 404 errors"""
-    return jsonify({'error': 'Not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors"""
-    return jsonify({'error': 'Internal server error'}), 500
+        logger.info(f"JSON: {json.dumps(data, indent=2)}")
+    except:
+        logger.info("Not JSON data")
+    
+    return jsonify({
+        'message': 'Slack data received and logged',
+        'headers': dict(request.headers),
+        'data': request.get_data(as_text=True)
+    })
 
 if __name__ == '__main__':
-    logger.info(f"Starting EC2 Instance Control App on port {PORT}")
-    logger.info(f"Test mode: {TEST_MODE}")
-    app.run(host='0.0.0.0', port=PORT, debug=False) 
+    app.run(host='0.0.0.0', port=PORT, debug=True) 
