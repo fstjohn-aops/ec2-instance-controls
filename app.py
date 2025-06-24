@@ -48,6 +48,9 @@ def set_ec2_power():
     user_id = request.form.get('user_id', '')
     instance_id = request.form.get('instance_id', '')
     power_state = request.form.get('power_state', '')
+    app.logger.info(user_id)
+    app.logger.info(instance_id)
+    app.logger.info(power_state)
     
     if user_id not in ADMIN_USERS:
         return "Only administrators can control EC2 instances."
