@@ -13,6 +13,10 @@ def health():
 
 @app.route('/slack/test', methods=['POST'])
 def slack_test():
+    print("=== SLACK REQUEST ===")
+    print(request.get_data(as_text=True))
+    print("====================")
+    
     return jsonify({
         'message': 'Slack data received',
         'headers': dict(request.headers),
