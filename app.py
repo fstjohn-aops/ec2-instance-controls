@@ -45,6 +45,9 @@ def admin_check():
 
 @app.route('/ec2/power', methods=['POST'])
 def set_ec2_power():
+    app.logger.info("=== SLACK REQUEST ===")
+    app.logger.info(dict(request.form))
+    app.logger.info("====================")
     user_id = request.form.get('user_id', '')
     instance_id = request.form.get('instance_id', '')
     power_state = request.form.get('power_state', '')
