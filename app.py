@@ -9,6 +9,9 @@ import logging
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Admin user IDs
+ADMIN_USERS = {"U08QYU6AX0V"}
+
 @app.route('/health')
 def health():
     return jsonify({'status': 'ok'})
@@ -24,6 +27,11 @@ def slack_test():
         'headers': dict(request.headers),
         'data': request.get_data(as_text=True)
     })
+
+@app.route('/admin/check', methods=['POST'])
+def admin_check():
+    user_id = request.form.get('user_id', '')
+    return "yes" if user_id in ADMIN_USERS else "no"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True) 
