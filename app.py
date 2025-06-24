@@ -4,8 +4,10 @@ Simple Flask App
 """
 
 from flask import Flask, request, jsonify
+import logging
 
 app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
 
 @app.route('/health')
 def health():
@@ -13,9 +15,9 @@ def health():
 
 @app.route('/slack/test', methods=['POST'])
 def slack_test():
-    print("=== SLACK REQUEST ===")
-    print(request.get_data(as_text=True))
-    print("====================")
+    app.logger.info("=== SLACK REQUEST ===")
+    app.logger.info(request.get_data(as_text=True))
+    app.logger.info("====================")
     
     return jsonify({
         'message': 'Slack data received',
