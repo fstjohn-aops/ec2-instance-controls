@@ -52,14 +52,20 @@ MOCK_INSTANCE_STATES = {
 }
 
 # Database setup
+def get_db_path():
+    """Get database path, supporting test mode"""
+    if os.environ.get('TEST_DB_PATH'):
+        return os.environ.get('TEST_DB_PATH')
+    
+    # Create data directory if it doesn't exist
+    data_dir = os.path.join(os.getcwd(), 'data')
+    os.makedirs(data_dir, exist_ok=True)
+    return os.path.join(data_dir, 'ec2_instances.db')
+
 def init_db():
     """Initialize SQLite database with instance-user mappings"""
     try:
-        # Create data directory if it doesn't exist
-        data_dir = os.path.join(os.getcwd(), 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -86,8 +92,7 @@ with app.app_context():
 def get_instance_for_user(slack_user_id):
     """Get instance ID for a given Slack user"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT instance_id, instance_name FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
@@ -101,8 +106,7 @@ def get_instance_for_user(slack_user_id):
 def get_users_for_instance(instance_id):
     """Get all users that can control a given instance"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT slack_user_id, slack_username FROM instance_users WHERE instance_id = ?', (instance_id,))
@@ -116,9 +120,9 @@ def get_users_for_instance(instance_id):
 def create_instance_user_mapping(instance_id, instance_name, slack_user_id, slack_username):
     """Create or update instance-user mapping"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        os.makedirs(data_dir, exist_ok=True)
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
+        # Ensure directory exists for the database
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('''
@@ -135,8 +139,7 @@ def create_instance_user_mapping(instance_id, instance_name, slack_user_id, slac
 def can_user_control_instance(slack_user_id, instance_id):
     """Check if a user can control a specific instance"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT 1 FROM instance_users WHERE slack_user_id = ? AND instance_id = ?', (slack_user_id, instance_id))
@@ -304,8 +307,7 @@ def health_check():
 def list_assignments():
     """List all user-instance assignments"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('SELECT slack_user_id, slack_username, instance_id, instance_name, created_at FROM instance_users')
@@ -322,7 +324,7 @@ def list_assignments():
                 'created_at': row[4]
             })
         
-        return jsonify(assignments)
+        return jsonify({"assignments": assignments})
     except Exception as e:
         logger.error(f"Error in list_assignments: {e}")
         return jsonify({"error": "Database error", "details": str(e)}), 500
@@ -333,7 +335,7 @@ def assign_instance():
     data = request.get_json()
     
     if not data or not all(k in data for k in ['slack_user_id', 'slack_username', 'instance_id']):
-        return jsonify({"error": "Missing required fields: slack_user_id, slack_username, instance_id"}), 400
+        return jsonify({"success": False, "error": "Missing required fields: slack_user_id, slack_username, instance_id"}), 400
     
     try:
         instance_name = data.get('instance_name', data['instance_id'])
@@ -343,7 +345,7 @@ def assign_instance():
             # Verify instance exists in AWS
             response = ec2_client.describe_instances(InstanceIds=[data['instance_id']])
             if not response['Reservations']:
-                return jsonify({"error": "Instance not found"}), 404
+                return jsonify({"success": False, "error": "Instance not found"}), 404
             
             # Get instance name from AWS tags
             instance_tags = response['Reservations'][0]['Instances'][0].get('Tags', [])
@@ -358,6 +360,7 @@ def assign_instance():
         )
         
         return jsonify({
+            "success": True,
             "message": "Instance assigned successfully",
             "slack_user_id": data['slack_user_id'],
             "instance_id": data['instance_id'],
@@ -365,16 +368,15 @@ def assign_instance():
         })
     
     except ClientError as e:
-        return jsonify({"error": f"AWS error: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"AWS error: {str(e)}"}), 500
     except Exception as e:
-        return jsonify({"error": f"Internal error: {str(e)}"}), 500
+        return jsonify({"success": False, "error": f"Internal error: {str(e)}"}), 500
 
 @app.route('/api/assignments/<slack_user_id>', methods=['DELETE'])
 def remove_assignment(slack_user_id):
     """Remove user-instance assignment"""
     try:
-        data_dir = os.path.join(os.getcwd(), 'data')
-        db_path = os.path.join(data_dir, 'ec2_instances.db')
+        db_path = get_db_path()
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         cursor.execute('DELETE FROM instance_users WHERE slack_user_id = ?', (slack_user_id,))
@@ -383,12 +385,12 @@ def remove_assignment(slack_user_id):
         conn.close()
         
         if deleted:
-            return jsonify({"message": "Assignment removed successfully"})
+            return jsonify({"success": True, "message": "Assignment removed successfully"})
         else:
-            return jsonify({"error": "Assignment not found"}), 404
+            return jsonify({"success": False, "error": "Assignment not found"}), 404
     except Exception as e:
         logger.error(f"Error in remove_assignment: {e}")
-        return jsonify({"error": "Database error", "details": str(e)}), 500
+        return jsonify({"success": False, "error": "Database error", "details": str(e)}), 500
 
 @app.route('/api/instances/<instance_id>/status', methods=['GET'])
 def get_instance_status_api(instance_id):
@@ -398,9 +400,9 @@ def get_instance_status_api(instance_id):
         if status:
             return jsonify({"instance_id": instance_id, "status": status})
         else:
-            return jsonify({"error": "Instance not found"}), 404
+            return jsonify({"success": False, "error": "Instance not found"}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # Simulation endpoints for testing Slack-like requests
 @app.route('/api/simulate/slack/start', methods=['POST'])
