@@ -45,18 +45,18 @@ def admin_check():
 
 @app.route('/ec2/power', methods=['POST'])
 def set_ec2_power():
-    app.logger.info("=== SLACK REQUEST ===")
-    app.logger.info(dict(request.form))
-    app.logger.info("====================")
     user_id = request.form.get('user_id', '')
-    instance_id = request.form.get('instance_id', '')
-    power_state = request.form.get('power_state', '')
-    app.logger.info(user_id)
-    app.logger.info(instance_id)
-    app.logger.info(power_state)
+    text = request.form.get('text', '').strip()
     
     if user_id not in ADMIN_USERS:
         return "Only administrators can control EC2 instances."
+    
+    # Parse text: "i-057cf7b437a182811 on"
+    parts = text.split()
+    if len(parts) != 2:
+        return "Usage: <instance-id> <on|off>"
+    
+    instance_id, power_state = parts
     
     if user_id not in USER_INSTANCES or instance_id not in USER_INSTANCES[user_id]:
         return "You don't have permission to control this instance."
@@ -64,8 +64,8 @@ def set_ec2_power():
     if power_state not in ['on', 'off']:
         return "Power state must be 'on' or 'off'."
     
-    print(f"AWS: Setting {instance_id} to {power_state}")
-    return f"Set `{instance_id}` to `{power_state}`"
+    app.logger.info(f"AWS: Setting {instance_id} to {power_state}")
+    return f"Set {instance_id} to {power_state}"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
