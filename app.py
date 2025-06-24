@@ -16,7 +16,7 @@ def health():
 @app.route('/slack/test', methods=['POST'])
 def slack_test():
     app.logger.info("=== SLACK REQUEST ===")
-    app.logger.info(request.get_data(as_text=True))
+    app.logger.info(dict(request.form))
     app.logger.info("====================")
     
     return jsonify({
