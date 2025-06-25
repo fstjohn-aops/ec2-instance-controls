@@ -64,11 +64,16 @@ def set_ec2_power():
     if power_state not in ['on', 'off']:
         return "Power state must be 'on' or 'off'."
     
-    app.logger.info(f"AWS: Setting {instance_id} to {power_state}")
-    return jsonify({
+    # Respond immediately
+    response = jsonify({
         'response_type': 'ephemeral',
         'text': f"Set `{instance_id}` to {power_state}"
     })
+    
+    # Then do the AWS operation
+    app.logger.info(f"AWS: Setting {instance_id} to {power_state}")
+    
+    return response
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
