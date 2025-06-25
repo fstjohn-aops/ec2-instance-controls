@@ -28,9 +28,8 @@ def slack_test():
     app.logger.info("====================")
     
     return jsonify({
-        'message': 'Slack data received',
-        'headers': dict(request.headers),
-        'data': request.get_data(as_text=True)
+        'response_type': 'ephemeral',
+        'text': 'Test message'
     })
 
 @app.route('/admin/check', methods=['POST'])
@@ -66,7 +65,6 @@ def set_ec2_power():
     
     # Respond immediately
     response = jsonify({
-        'response_type': 'ephemeral',
         'text': f"Set `{instance_id}` to {power_state}"
     })
     
