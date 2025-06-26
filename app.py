@@ -5,6 +5,7 @@ Simple Flask App
 
 from flask import Flask, request, jsonify
 import logging
+import boto3
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -14,8 +15,11 @@ ADMIN_USERS = {"U08QYU6AX0V"}
 
 # User to EC2 instances mapping
 USER_INSTANCES = {
-    "U08QYU6AX0V": ["i-057cf7b437a182811"]
+    "U08QYU6AX0V": ["i-0df9c53001c5c837d"]
 }
+
+# Initialize AWS client
+ec2_client = boto3.client('ec2', region_name='us-west-2')
 
 @app.route('/health')
 def health():
@@ -28,8 +32,9 @@ def slack_test():
     app.logger.info("====================")
     
     return jsonify({
-        'response_type': 'ephemeral',
-        'text': 'Test message'
+        'message': 'Slack data received',
+        'headers': dict(request.headers),
+        'data': request.get_data(as_text=True)
     })
 
 @app.route('/admin/check', methods=['POST'])
@@ -65,11 +70,20 @@ def set_ec2_power():
     
     # Respond immediately
     response = jsonify({
+        'response_type': 'ephemeral',
         'text': f"Set `{instance_id}` to {power_state}"
     })
     
     # Then do the AWS operation
-    app.logger.info(f"AWS: Setting {instance_id} to {power_state}")
+    try:
+        if power_state == 'on':
+            ec2_client.start_instances(InstanceIds=[instance_id])
+            app.logger.info(f"AWS: Started {instance_id}")
+        else:
+            ec2_client.stop_instances(InstanceIds=[instance_id])
+            app.logger.info(f"AWS: Stopped {instance_id}")
+    except Exception as e:
+        app.logger.error(f"AWS Error: {e}")
     
     return response
 
