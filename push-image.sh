@@ -8,7 +8,7 @@ if [ -z "$1" ]; then
 fi
 
 TAG=$1
-REGISTRY=${REGISTRY:-"cr.aops.tool/aops-docker-repo"}  # Updated registry URL
+REGISTRY=${REGISTRY:-"cr.aops.tools/aops-docker-repo"}  # Updated registry URL
 
 # Build the image
 echo "Building image with tag: $TAG"

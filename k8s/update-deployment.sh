@@ -12,7 +12,7 @@ fi
 echo "Updating ec2-slack-bot deployment to image tag: $LATEST_TAG"
 
 # Update the deployment with new image
-kubectl -n ec2-slack-bot set image deployment/ec2-slack-bot ec2-slack-bot=cr.aops.tool/aops-docker-repo/ec2-instance-controls:$LATEST_TAG
+kubectl -n ec2-slack-bot set image deployment/ec2-slack-bot ec2-slack-bot=cr.aops.tools/aops-docker-repo/ec2-instance-controls:$LATEST_TAG
 
 # Wait for rollout to complete
 echo "Waiting for deployment to roll out..."

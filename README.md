@@ -24,7 +24,7 @@ A Kubernetes-native Slack bot for managing EC2 instances through Slack commands.
 - Amazon EKS cluster with IAM roles configured
 - kubectl configured for your cluster
 - Podman installed locally (for building images)
-- Access to container registry (cr.aops.tool)
+- Access to container registry (cr.aops.tools)
 
 ## Quick Start
 
@@ -73,7 +73,7 @@ The project includes scripts for building and deploying container images:
 
 ### Container Registry
 
-Images are built and pushed to: `cr.aops.tool/aops-docker-repo/ec2-instance-controls`
+Images are built and pushed to: `cr.aops.tools/aops-docker-repo/ec2-instance-controls`
 
 ### Deployment Workflow
 

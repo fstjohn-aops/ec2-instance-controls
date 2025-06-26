@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: ec2-slack-bot
-          image: cr.aops.tool/aops-docker-repo/ec2-instance-controls:latest
+          image: cr.aops.tools/aops-docker-repo/ec2-instance-controls:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

@@ -21,4 +21,4 @@ This is a Slack bot for controlling EC2 instances. Several k8s resources are cre
 - `04-configmap`: Configuration data for the Slack bot application.
 
 ## Container Registry
-Images are pulled from: `cr.aops.tool/aops-docker-repo/ec2-instance-controls`
+Images are pulled from: `cr.aops.tools/aops-docker-repo/ec2-instance-controls`
