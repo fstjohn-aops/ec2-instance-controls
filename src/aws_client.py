@@ -10,13 +10,28 @@ logger = logging.getLogger(__name__)
 # Get AWS region from environment variable
 aws_region = os.environ.get('AWS_REGION', 'us-east-1')
 
-# Initialize AWS EC2 client
-try:
-    ec2_client = boto3.client('ec2')
-    logger.info("AWS credentials found in environment variables")
-except Exception as e:
-    logger.error(f"Failed to initialize AWS client: {e}")
-    raise
+# Initialize AWS EC2 client - defer until needed
+_ec2_client = None
+
+def _get_ec2_client():
+    """Get or create the EC2 client with proper region configuration"""
+
+    # Log all available environment variables
+    env_vars = {}
+    for key, value in os.environ.items():
+        env_vars[key] = value
+    
+    logger.info(f"ENVIRONMENT_VARS: {json.dumps(env_vars)}")
+
+    global _ec2_client
+    if _ec2_client is None:
+        try:
+            _ec2_client = boto3.client('ec2', region_name=aws_region)
+            logger.info(f"AWS credentials found in environment variables, using region: {aws_region}")
+        except Exception as e:
+            logger.error(f"Failed to initialize AWS client: {e}")
+            raise
+    return _ec2_client
 
 def _log_aws_operation(operation, target, details=None, success=True, error=None):
     """Log AWS operations for auditing purposes"""
@@ -41,7 +56,7 @@ def get_instance_state(instance_id):
     """Get the current state of an EC2 instance"""
     logger.info(f"get_instance_state called with instance_id: {instance_id}")
     try:
-        response = ec2_client.describe_instances(InstanceIds=[instance_id])
+        response = _get_ec2_client().describe_instances(InstanceIds=[instance_id])
         if response['Reservations']:
             instance = response['Reservations'][0]['Instances'][0]
             state = instance['State']['Name']
@@ -61,7 +76,7 @@ def get_instance_state(instance_id):
 def start_instance(instance_id):
     """Start an EC2 instance"""
     try:
-        response = ec2_client.start_instances(InstanceIds=[instance_id])
+        response = _get_ec2_client().start_instances(InstanceIds=[instance_id])
         logger.info(f"AWS: Started {instance_id}")
         _log_aws_operation("start_instances", instance_id, {
             "previous_state": response['StartingInstances'][0]['PreviousState']['Name'],
@@ -76,7 +91,7 @@ def start_instance(instance_id):
 def stop_instance(instance_id):
     """Stop an EC2 instance"""
     try:
-        response = ec2_client.stop_instances(InstanceIds=[instance_id])
+        response = _get_ec2_client().stop_instances(InstanceIds=[instance_id])
         logger.info(f"AWS: Stopped {instance_id}")
         _log_aws_operation("stop_instances", instance_id, {
             "previous_state": response['StoppingInstances'][0]['PreviousState']['Name'],
@@ -92,7 +107,7 @@ def get_instance_by_name(instance_name):
     """Find an EC2 instance by its Name tag"""
     try:
         logger.info(f"Searching for instance with Name tag: {instance_name}")
-        response = ec2_client.describe_instances(
+        response = _get_ec2_client().describe_instances(
             Filters=[
                 {
                     'Name': 'tag:Name',
@@ -142,7 +157,7 @@ def get_instance_by_name(instance_name):
 def get_instance_details(instance_id):
     """Get detailed information about an EC2 instance including Name tag"""
     try:
-        response = ec2_client.describe_instances(InstanceIds=[instance_id])
+        response = _get_ec2_client().describe_instances(InstanceIds=[instance_id])
         if response['Reservations']:
             instance = response['Reservations'][0]['Instances'][0]
             _log_aws_operation("describe_instances_details", instance_id, {
@@ -170,7 +185,7 @@ def get_instance_name(instance_id):
 def get_all_instances():
     """Get all EC2 instances in the region"""
     try:
-        response = ec2_client.describe_instances(
+        response = _get_ec2_client().describe_instances(
             Filters=[
                 {
                     'Name': 'instance-state-name',

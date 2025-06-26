@@ -2,6 +2,12 @@ The deployment to Kubernetes is done with one command:
 
     kubectl apply -f k8s/
 
+## EKS Pod Identity Setup
+
+This deployment uses EKS Pod Identity to provide AWS credentials to the pods via the existing `ack-ec2-controller` service account. The ACK (AWS Controllers for Kubernetes) EC2 controller service account should already be configured with the necessary IAM permissions for EC2 operations.
+
+If you need to verify or update the IAM permissions, see `iam-policy-example.json` for the required permissions.
+
 To build and push a new image version:
 
     # Build and push to registry
