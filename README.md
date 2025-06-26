@@ -1,9 +1,10 @@
-# EC2 Instance Controls
+# EC2 Instance Controls - Slack Bot
 
-A Kubernetes-native application for managing EC2 instances through HTTP APIs. Designed to run on Amazon EKS with IAM roles for service accounts.
+A Kubernetes-native Slack bot for managing EC2 instances through Slack commands. Designed to run on Amazon EKS with IAM roles for service accounts.
 
 ## Features
 
+- **Slack Integration**: Control EC2 instances directly from Slack
 - **EC2 Power Management**: Start, stop, and check status of EC2 instances
 - **Instance Scheduling**: Schedule automatic start/stop of instances
 - **User Access Control**: Role-based access to specific instances
@@ -12,10 +13,11 @@ A Kubernetes-native application for managing EC2 instances through HTTP APIs. De
 
 ## Architecture
 
-- **Flask Application**: HTTP API server
+- **Flask Application**: HTTP API server with Slack integration
 - **AWS SDK**: EC2 operations using IAM roles
 - **Persistent Storage**: Schedules stored in EBS volumes
 - **IAM Authentication**: Uses EKS service accounts for AWS access
+- **Slack Events API**: Handles Slack commands and interactions
 
 ## Prerequisites
 
@@ -23,6 +25,7 @@ A Kubernetes-native application for managing EC2 instances through HTTP APIs. De
 - kubectl configured for your cluster
 - Docker installed locally
 - Access to container registry (Nexus, ECR, etc.)
+- Slack app configured with Events API
 
 ## Quick Start
 
@@ -36,22 +39,30 @@ export AWS_REGION="us-west-2"
 ./aws/setup-iam.sh
 ```
 
-### 2. Configure Registry
+### 2. Configure Slack App
 
-Set your container registry details:
+Set up your Slack app credentials in the Kubernetes secrets:
 
 ```bash
-export REGISTRY_URL="your-nexus-registry.com"
-export REGISTRY_USERNAME="your-username"
-export REGISTRY_PASSWORD="your-password"
+# Update k8s/05-secrets.yml with your Slack credentials
+kubectl apply -f k8s/05-secrets.yml
 ```
 
 ### 3. Deploy Application
 
-Build and deploy to EKS:
+Deploy to EKS using the new Kubernetes configuration:
 
 ```bash
-./deploy.sh
+# Deploy everything
+kubectl apply -f k8s/
+
+# Or deploy individual components
+kubectl apply -f k8s/00-namespace.yml
+kubectl apply -f k8s/04-configmap.yml
+kubectl apply -f k8s/05-secrets.yml
+kubectl apply -f k8s/01-deployment.yml
+kubectl apply -f k8s/02-service.yml
+kubectl apply -f k8s/03-ingress.yml
 ```
 
 ## Configuration
@@ -63,64 +74,96 @@ The application uses these environment variables (configured via ConfigMap):
 - `AWS_REGION`: AWS region for EC2 operations
 - `LOG_LEVEL`: Logging level (INFO, DEBUG, etc.)
 - `SCHEDULE_DIR`: Directory for storing schedules
+- `PORT`: Application port (default: 8000)
 
 ### Secrets
 
-Optional Slack integration (if needed):
+Slack integration credentials:
 - `SLACK_BOT_TOKEN`: Slack bot token
 - `SLACK_SIGNING_SECRET`: Slack signing secret
 
 ## API Endpoints
 
-- `POST /health` - Health check
+- `GET /health` - Health check
+- `POST /slack/events` - Slack Events API endpoint
 - `POST /instances` - List user's instances
 - `POST /admin/check` - Check admin status
 - `POST /ec2/power` - Control instance power state
 - `POST /ec2-schedule` - Manage instance schedules
 
-## Usage Examples
+## Slack Commands
 
 ### Check Instance Status
-```bash
-curl -X POST http://localhost:8000/ec2/power \
-  -d "user_id=U123456&user_name=john&text=i-1234567890abcdef0"
+```
+/ec2 status i-1234567890abcdef0
 ```
 
 ### Start Instance
-```bash
-curl -X POST http://localhost:8000/ec2/power \
-  -d "user_id=U123456&user_name=john&text=i-1234567890abcdef0 on"
+```
+/ec2 start i-1234567890abcdef0
+```
+
+### Stop Instance
+```
+/ec2 stop i-1234567890abcdef0
 ```
 
 ### List Instances
-```bash
-curl -X POST http://localhost:8000/instances \
-  -d "user_id=U123456&user_name=john"
+```
+/ec2 list
 ```
 
 ## Updating the Application
 
+### Update Image Version
 ```bash
-export IMAGE_TAG="v1.1"
-./deploy.sh
+# Update to a specific version
+./k8s/update-deployment.sh v1.2.3
+
+# Update to latest
+./k8s/update-deployment.sh latest
+```
+
+### Full Redeployment
+```bash
+# Remove and reapply all resources
+kubectl delete -f k8s/
+kubectl apply -f k8s/
 ```
 
 ## Monitoring
 
 ### View Logs
 ```bash
-kubectl logs -f deployment/ec2-instance-controls -n ec2-controls
+kubectl logs -f deployment/ec2-slack-bot -n ec2-slack-bot
 ```
 
 ### Check Pod Status
 ```bash
-kubectl get pods -n ec2-controls
+kubectl get pods -n ec2-slack-bot
 ```
 
 ### Port Forward for Testing
 ```bash
-kubectl port-forward service/ec2-instance-controls 8000:8000 -n ec2-controls
+kubectl port-forward service/ec2-slack-bot 8000:80 -n ec2-slack-bot
 ```
+
+### Check Service Status
+```bash
+kubectl get svc -n ec2-slack-bot
+kubectl get ingress -n ec2-slack-bot
+```
+
+## Kubernetes Resources
+
+The deployment creates several Kubernetes resources:
+
+- **Namespace**: `ec2-slack-bot` - Isolated namespace for the Slack bot
+- **Deployment**: `ec2-slack-bot` - Main application deployment
+- **Service**: `ec2-slack-bot` - Internal service for the deployment
+- **Ingress**: `ec2-slack-bot` - External access with TLS and IP whitelist
+- **ConfigMap**: `ec2-slack-bot-config` - Application configuration
+- **Secrets**: `slack-credentials` - Slack API credentials
 
 ## Security
 
@@ -128,6 +171,8 @@ kubectl port-forward service/ec2-instance-controls 8000:8000 -n ec2-controls
 - **No Hardcoded Credentials**: All AWS access through IAM roles
 - **Audit Logging**: All operations logged with user context
 - **Role-Based Access**: Users can only access authorized instances
+- **IP Whitelist**: Ingress restricted to office IP addresses
+- **TLS Encryption**: HTTPS with Let's Encrypt certificates
 
 ## Troubleshooting
 
@@ -136,16 +181,33 @@ kubectl port-forward service/ec2-instance-controls 8000:8000 -n ec2-controls
 1. **IAM Role Not Working**: Ensure OIDC provider is configured and service account has correct annotations
 2. **Image Pull Errors**: Check registry credentials and image path
 3. **Pod Startup Failures**: Check logs for configuration issues
+4. **Slack Integration Issues**: Verify Slack credentials and Events API configuration
 
 ### Debug Commands
 
 ```bash
 # Check service account
-kubectl describe serviceaccount ec2-controls-sa -n ec2-controls
+kubectl describe serviceaccount ec2-controls-sa -n ec2-slack-bot
 
 # Check pod events
-kubectl describe pod -l app=ec2-instance-controls -n ec2-controls
+kubectl describe pod -l app=ec2-slack-bot -n ec2-slack-bot
 
 # Check AWS credentials in pod
-kubectl exec -it deployment/ec2-instance-controls -n ec2-controls -- env | grep AWS
+kubectl exec -it deployment/ec2-slack-bot -n ec2-slack-bot -- env | grep AWS
+
+# Check Slack configuration
+kubectl get secret slack-credentials -n ec2-slack-bot -o yaml
+
+# Check ingress status
+kubectl describe ingress ec2-slack-bot -n ec2-slack-bot
+```
+
+### Health Checks
+
+```bash
+# Test health endpoint
+curl https://ec2-slack-bot.aops.ninja/health
+
+# Check application logs
+kubectl logs -f deployment/ec2-slack-bot -n ec2-slack-bot
 ```

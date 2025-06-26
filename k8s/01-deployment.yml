@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ec2-slack-bot
+  namespace: ec2-slack-bot
+  labels:
+    app: ec2-slack-bot
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Allow creating 1 new pod
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ec2-slack-bot
+  template:
+    metadata:
+      labels:
+        app: ec2-slack-bot
+      annotations:
+        # EKS-specific annotations for IAM roles
+        eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/ec2-controls-role
+    spec:
+      serviceAccountName: ec2-controls-sa
+      containers:
+        - name: ec2-slack-bot
+          image: ec2-instance-controls:latest  # Will be replaced by deployment script
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: PORT
+              value: "8000"
+            - name: AWS_REGION
+              valueFrom:
+                configMapKeyRef:
+                  name: ec2-slack-bot-config
+                  key: AWS_REGION
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: ec2-slack-bot-config
+                  key: LOG_LEVEL
+            - name: SCHEDULE_DIR
+              valueFrom:
+                configMapKeyRef:
+                  name: ec2-slack-bot-config
+                  key: SCHEDULE_DIR
+            # Slack credentials (optional - only if needed)
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: slack-bot-token
+                  optional: true
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: slack-credentials
+                  key: slack-signing-secret
+                  optional: true
+          volumeMounts:
+            - name: schedule-storage
+              mountPath: /app/schedules
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Security hardening
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: schedule-storage
+          persistentVolumeClaim:
+            claimName: schedule-pvc
+      securityContext:
+        fsGroup: 10001 
