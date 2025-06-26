@@ -76,12 +76,13 @@ def set_ec2_power():
     
     # Then do the AWS operation
     try:
-        if power_state == 'on':
-            ec2_client.start_instances(InstanceIds=[instance_id])
-            app.logger.info(f"AWS: Started {instance_id}")
+        response = ec2_client.describe_instances(InstanceIds=[instance_id])
+        if response['Reservations']:
+            instance = response['Reservations'][0]['Instances'][0]
+            current_state = instance['State']['Name']
+            app.logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
         else:
-            ec2_client.stop_instances(InstanceIds=[instance_id])
-            app.logger.info(f"AWS: Stopped {instance_id}")
+            app.logger.error(f"AWS: Instance {instance_id} not found")
     except Exception as e:
         app.logger.error(f"AWS Error: {e}")
     
