@@ -21,26 +21,29 @@ A Kubernetes-native Slack bot for managing EC2 instances through Slack commands.
 
 ## Prerequisites
 
-- Amazon EKS cluster
+- Amazon EKS cluster with IAM roles configured
 - kubectl configured for your cluster
-- Docker installed locally
-- Access to container registry (Nexus, ECR, etc.)
+- Podman installed locally (for building images)
+- Access to container registry (cr.aops.tool)
 
 ## Quick Start
 
-### 1. Setup IAM Role
+### 1. Build and Deploy
 
-Create the necessary IAM resources for EKS service account authentication:
+Build the container image and deploy to your cluster:
 
 ```bash
-export EKS_CLUSTER_NAME="your-cluster-name"
-export AWS_REGION="us-west-2"
-./aws/setup-iam.sh
+# Build and push image to registry
+./push-image.sh v1.0.0
+
+# Deploy to Kubernetes
+kubectl apply -f k8s/
+
+# Update deployment with new image
+./k8s/update-deployment.sh v1.0.0
 ```
 
-### 2. Deploy Application
-
-Deploy to EKS using the new Kubernetes configuration:
+### 2. Alternative: Deploy Individual Components
 
 ```bash
 # Deploy everything
@@ -53,6 +56,30 @@ kubectl apply -f k8s/01-deployment.yml
 kubectl apply -f k8s/02-service.yml
 kubectl apply -f k8s/03-ingress.yml
 ```
+
+## Build and Deployment
+
+### Building Images
+
+The project includes scripts for building and deploying container images:
+
+```bash
+# Build image for x86_64 (EKS compatibility)
+./build-image.sh v1.0.0
+
+# Build and push to registry
+./push-image.sh v1.0.0
+```
+
+### Container Registry
+
+Images are built and pushed to: `cr.aops.tool/aops-docker-repo/ec2-instance-controls`
+
+### Deployment Workflow
+
+1. **Build**: `./build-image.sh <tag>` - Builds x86_64 image locally
+2. **Push**: `./push-image.sh <tag>` - Builds and pushes to registry
+3. **Deploy**: `./k8s/update-deployment.sh <tag>` - Updates Kubernetes deployment
 
 ## Configuration
 
@@ -78,11 +105,11 @@ The application uses these environment variables (configured via ConfigMap):
 
 ### Update Image Version
 ```bash
-# Update to a specific version
-./k8s/update-deployment.sh v1.2.3
+# Build and push new version
+./push-image.sh v1.2.3
 
-# Update to latest
-./k8s/update-deployment.sh latest
+# Update deployment
+./k8s/update-deployment.sh v1.2.3
 ```
 
 ### Full Redeployment
@@ -145,9 +172,6 @@ The deployment creates several Kubernetes resources:
 ### Debug Commands
 
 ```bash
-# Check service account
-kubectl describe serviceaccount ec2-controls-sa -n ec2-slack-bot
-
 # Check pod events
 kubectl describe pod -l app=ec2-slack-bot -n ec2-slack-bot
 
