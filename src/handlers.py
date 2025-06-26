@@ -1,4 +1,5 @@
 import logging
+import re
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance
 from src.auth import is_admin, can_control_instance, get_user_instances
@@ -15,6 +16,12 @@ def handle_admin_check(request):
     else:
         return f"User: `{user_name}` is not an administrator."
 
+def _is_valid_instance_id(instance_id):
+    """Validate EC2 instance ID format"""
+    # EC2 instance IDs follow pattern: i- followed by 8 or 17 hex characters
+    pattern = r'^i-[0-9a-f]{8}$|^i-[0-9a-f]{17}$'
+    return bool(re.match(pattern, instance_id))
+
 def handle_ec2_power(request):
     """Handle the EC2 power control endpoint"""
     user_id = request.form.get('user_id', '')
@@ -26,6 +33,10 @@ def handle_ec2_power(request):
     if len(parts) == 1:
         # Just instance ID - return current state
         instance_id = parts[0]
+        
+        # Validate instance ID format first
+        if not _is_valid_instance_id(instance_id):
+            return "Usage: <instance-id> [on|off]"
         
         if not can_control_instance(user_id, instance_id):
             return f"Access to instance `{instance_id}` denied."
@@ -40,6 +51,10 @@ def handle_ec2_power(request):
     elif len(parts) == 2:
         # Instance ID and power state - change state
         instance_id, power_state = parts
+        
+        # Validate instance ID format first
+        if not _is_valid_instance_id(instance_id):
+            return "Usage: <instance-id> [on|off]"
         
         if not can_control_instance(user_id, instance_id):
             return f"Access to instance `{instance_id}` denied."

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from flask import Flask
 from src.handlers import handle_admin_check, handle_ec2_power
 
@@ -37,7 +37,7 @@ def test_ec2_power_invalid_format():
     request.form = {'user_id': 'U08QYU6AX0V', 'text': 'invalid'}
     
     result = handle_ec2_power(request)
-    assert "Usage:" in result
+    assert "Instance `invalid` not found" in result
 
 def test_ec2_power_invalid_state():
     """Test EC2 power with invalid power state"""
@@ -45,4 +45,12 @@ def test_ec2_power_invalid_state():
     request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d maybe'}
     
     result = handle_ec2_power(request)
-    assert "must be 'on' or 'off'" in result 
+    assert "must be 'on' or 'off'" in result
+
+def test_ec2_power_usage_message():
+    """Test EC2 power with too many arguments"""
+    request = Mock()
+    request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on extra'}
+    
+    result = handle_ec2_power(request)
+    assert "Usage:" in result 
