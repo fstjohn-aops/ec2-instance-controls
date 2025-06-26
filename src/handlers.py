@@ -20,36 +20,53 @@ def handle_ec2_power(request):
     user_id = request.form.get('user_id', '')
     text = request.form.get('text', '').strip()
     
-    # Parse text: "i-0df9c53001c5c837d on"
+    # Parse text: "i-0df9c53001c5c837d" or "i-0df9c53001c5c837d on"
     parts = text.split()
-    if len(parts) != 2:
-        return "Usage: <instance-id> <on|off>"
     
-    instance_id, power_state = parts
-    
-    if not can_control_instance(user_id, instance_id):
-        return f"Instance `{instance_id}` is not assigned to you or doesn't exist."
-    
-    if power_state not in ['on', 'off']:
-        return "Power state must be 'on' or 'off'."
-    
-    # Respond immediately
-    response = jsonify({
-        'response_type': 'ephemeral',
-        'text': f"Set `{instance_id}` to {power_state}"
-    })
-    
-    # Then do the AWS operation
-    current_state = get_instance_state(instance_id)
-    if current_state:
-        logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
+    if len(parts) == 1:
+        # Just instance ID - return current state
+        instance_id = parts[0]
         
-        # Change the state
-        if power_state == 'on':
-            start_instance(instance_id)
+        if not can_control_instance(user_id, instance_id):
+            return f"Instance `{instance_id}` is not assigned to you or doesn't exist."
+        
+        # Get current state
+        current_state = get_instance_state(instance_id)
+        if current_state:
+            return f"Instance `{instance_id}` is currently {current_state}"
         else:
-            stop_instance(instance_id)
-    else:
-        logger.error(f"AWS: Instance {instance_id} not found")
+            return f"Instance `{instance_id}` not found"
     
-    return response 
+    elif len(parts) == 2:
+        # Instance ID and power state - change state
+        instance_id, power_state = parts
+        
+        if not can_control_instance(user_id, instance_id):
+            return f"Instance `{instance_id}` is not assigned to you or doesn't exist."
+        
+        if power_state not in ['on', 'off']:
+            return "Power state must be 'on' or 'off'."
+        
+        # Respond immediately
+        response = jsonify({
+            'response_type': 'ephemeral',
+            'text': f"Set `{instance_id}` to {power_state}"
+        })
+        
+        # Then do the AWS operation
+        current_state = get_instance_state(instance_id)
+        if current_state:
+            logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
+            
+            # Change the state
+            if power_state == 'on':
+                start_instance(instance_id)
+            else:
+                stop_instance(instance_id)
+        else:
+            logger.error(f"AWS: Instance {instance_id} not found")
+        
+        return response
+    
+    else:
+        return "Usage: <instance-id> [on|off]" 
