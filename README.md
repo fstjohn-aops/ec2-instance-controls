@@ -74,28 +74,6 @@ The application uses these environment variables (configured via ConfigMap):
 - `POST /ec2/power` - Control instance power state
 - `POST /ec2-schedule` - Manage instance schedules
 
-## Slack Commands
-
-### Check Instance Status
-```
-/ec2 status i-1234567890abcdef0
-```
-
-### Start Instance
-```
-/ec2 start i-1234567890abcdef0
-```
-
-### Stop Instance
-```
-/ec2 stop i-1234567890abcdef0
-```
-
-### List Instances
-```
-/ec2 list
-```
-
 ## Updating the Application
 
 ### Update Image Version
