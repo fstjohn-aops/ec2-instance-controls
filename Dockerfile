@@ -12,9 +12,6 @@ COPY app.py .
 COPY test_app.py .
 COPY src/ ./src/
 
-# Create data directory for SQLite database
-RUN mkdir -p /app/data
-
 # Expose port
 EXPOSE 8000
 

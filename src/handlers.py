@@ -2,7 +2,7 @@ import logging
 import re
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
-from src.auth import is_admin, can_control_instance, get_user_instances
+from src.auth import is_admin, get_user_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 
 logger = logging.getLogger(__name__)
@@ -13,9 +13,9 @@ def handle_admin_check(request):
     user_name = request.form.get('user_name', 'Unknown')
     
     if is_admin(user_id):
-        return f"User: `{user_name}` is an administrator."
+        return f"User: `{user_name}` is authenticated and can access all instances."
     else:
-        return f"User: `{user_name}` is not an administrator."
+        return f"User: `{user_name}` is not authenticated."
 
 def _is_valid_instance_id(instance_id):
     """Validate EC2 instance ID format"""
@@ -28,16 +28,16 @@ def handle_ec2_power(request):
     user_id = request.form.get('user_id', '')
     text = request.form.get('text', '').strip()
     
+    # Check if user is authenticated
+    if not user_id:
+        return "Error: Authentication required. Please ensure you're logged into Slack."
+    
     # Parse text: "instance-id" or "instance-name" or "instance-id on" or "instance-name on"
     parts = text.split()
     
     if len(parts) == 1:
         # Just instance identifier - return current state
         instance_identifier = parts[0]
-        
-        # Check if user can control this instance
-        if not can_control_instance(user_id, instance_identifier):
-            return f"Access to instance `{instance_identifier}` denied."
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
@@ -59,10 +59,6 @@ def handle_ec2_power(request):
     elif len(parts) == 2:
         # Instance identifier and power state - change state
         instance_identifier, power_state = parts
-        
-        # Check if user can control this instance
-        if not can_control_instance(user_id, instance_identifier):
-            return f"Access to instance `{instance_identifier}` denied."
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
@@ -108,12 +104,12 @@ def handle_list_instances(request):
     user_name = request.form.get('user_name', 'Unknown')
     
     if not user_id:
-        return "Error: user_id parameter is required."
+        return "Error: Authentication required. Please ensure you're logged into Slack."
     
     instances = get_user_instances(user_id)
     
     if not instances:
-        return f"User `{user_name}` has no assigned instances."
+        return f"No instances found in the AWS region."
     
     # Get current state for each instance
     instance_states = []
@@ -132,7 +128,7 @@ def handle_list_instances(request):
             else:
                 instance_states.append(f"`{instance_id}` - unknown state")
     
-    response = f"Instances assigned to `{user_name}`:\n"
+    response = f"All instances in AWS region:\n"
     response += "\n".join(f"• {instance}" for instance in instance_states)
     
     return response
@@ -142,16 +138,16 @@ def handle_ec2_schedule(request):
     user_id = request.form.get('user_id', '')
     text = request.form.get('text', '').strip()
     
+    # Check if user is authenticated
+    if not user_id:
+        return "Error: Authentication required. Please ensure you're logged into Slack."
+    
     # Parse text: "instance-id" or "instance-name" or "instance-id start_time to stop_time" or "instance-id clear"
     parts = text.split()
     
     if len(parts) == 1:
         # Just instance identifier - return current schedule
         instance_identifier = parts[0]
-        
-        # Check if user can control this instance
-        if not can_control_instance(user_id, instance_identifier):
-            return f"Access to instance `{instance_identifier}` denied."
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
@@ -172,10 +168,6 @@ def handle_ec2_schedule(request):
     elif len(parts) == 2:
         # Instance identifier and command - could be clear command or invalid format
         instance_identifier, command = parts
-        
-        # Check if user can control this instance
-        if not can_control_instance(user_id, instance_identifier):
-            return f"Access to instance `{instance_identifier}` denied."
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
@@ -206,10 +198,6 @@ def handle_ec2_schedule(request):
     elif len(parts) >= 4:
         # Instance identifier and schedule - set schedule
         instance_identifier = parts[0]
-        
-        # Check if user can control this instance
-        if not can_control_instance(user_id, instance_identifier):
-            return f"Access to instance `{instance_identifier}` denied."
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)

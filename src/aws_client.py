@@ -117,6 +117,29 @@ def get_instance_name(instance_id):
                 return tag['Value']
     return None
 
+def get_all_instances():
+    """Get all EC2 instances in the region"""
+    try:
+        response = ec2_client.describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-state-name',
+                    'Values': ['pending', 'running', 'stopping', 'stopped']
+                }
+            ]
+        )
+        
+        instances = []
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                instances.append(instance)
+        
+        logger.info(f"Found {len(instances)} instances in region {aws_region}")
+        return instances
+    except Exception as e:
+        logger.error(f"AWS Error getting all instances: {e}")
+        return []
+
 def resolve_instance_identifier(identifier):
     """Resolve an instance identifier (ID or Name) to instance ID"""
     logger.info(f"Resolving instance identifier: {identifier}")
