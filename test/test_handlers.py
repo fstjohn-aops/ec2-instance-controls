@@ -9,20 +9,20 @@ app = Flask(__name__)
 
 # Admin check tests
 def test_admin_check_admin():
-    """Test admin check for admin user"""
+    """Test admin check for authenticated user"""
     request = Mock()
     request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
     
     result = handle_admin_check(request)
-    assert "is an administrator" in result
+    assert "authenticated and can access all instances" in result
 
 def test_admin_check_non_admin():
-    """Test admin check for non-admin user"""
+    """Test admin check for authenticated user (any user with user_id is now an admin)"""
     request = Mock()
     request.form = {'user_id': 'U123456789', 'user_name': 'otheruser'}
     
     result = handle_admin_check(request)
-    assert "is not an administrator" in result
+    assert "authenticated and can access all instances" in result
 
 def test_admin_check_missing_user_id():
     """Test admin check with missing user_id"""
@@ -30,7 +30,7 @@ def test_admin_check_missing_user_id():
     request.form = {'user_name': 'fstjohn'}
     
     result = handle_admin_check(request)
-    assert "is not an administrator" in result
+    assert "not authenticated" in result
 
 def test_admin_check_empty_user_id():
     """Test admin check with empty user_id"""
@@ -38,7 +38,7 @@ def test_admin_check_empty_user_id():
     request.form = {'user_id': '', 'user_name': 'fstjohn'}
     
     result = handle_admin_check(request)
-    assert "is not an administrator" in result
+    assert "not authenticated" in result
 
 # Instance list tests
 def test_list_instances_with_instances():
@@ -55,7 +55,7 @@ def test_list_instances_with_instances():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_list_instances(request)
-        assert "Instances assigned to `fstjohn`" in result
+        assert "All instances in AWS region" in result
         assert "test-instance-1" in result
         assert "test-instance-2" in result
         assert "running" in result
@@ -70,7 +70,7 @@ def test_list_instances_no_instances():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_list_instances(request)
-        assert "has no assigned instances" in result
+        assert "No instances found" in result
 
 def test_list_instances_missing_user_id():
     """Test listing instances with missing user_id"""
@@ -78,7 +78,7 @@ def test_list_instances_missing_user_id():
     request.form = {'user_name': 'fstjohn'}
     
     result = handle_list_instances(request)
-    assert "user_id parameter is required" in result
+    assert "Authentication required" in result
 
 def test_list_instances_instance_state_unknown():
     """Test listing instances when instance state is unknown"""
@@ -174,13 +174,24 @@ def test_ec2_power_stop_instance():
             assert "to off" in result.json['text']
 
 def test_ec2_power_access_denied():
-    """Test EC2 power access denied for unauthorized user"""
-    request = Mock()
-    request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d on'}
-    
-    result = handle_ec2_power(request)
-    assert "Access to instance" in result
-    assert "denied" in result
+    """Test EC2 power access denied for unauthorized user - now any authenticated user can access"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.start_instance') as mock_start, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'stopped'
+            mock_start.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d on'}
+            
+            result = handle_ec2_power(request)
+            assert "Set `test-instance`" in result.json['text']
+            assert "to on" in result.json['text']
 
 def test_ec2_power_instance_not_found():
     """Test EC2 power with non-existent instance"""
@@ -355,13 +366,21 @@ def test_ec2_schedule_set_failed():
             assert "Failed to set schedule" in result
 
 def test_ec2_schedule_access_denied():
-    """Test schedule access denied for unauthorized user"""
-    request = Mock()
-    request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
-    
-    result = handle_ec2_schedule(request)
-    assert "Access to instance" in result
-    assert "denied" in result
+    """Test schedule access denied for unauthorized user - now any authenticated user can access"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_schedule') as mock_get_schedule, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_schedule.return_value = None
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule for `test-instance`" in result
+            assert "No schedule set" in result
 
 def test_ec2_schedule_instance_not_found():
     """Test schedule with non-existent instance"""
@@ -505,8 +524,7 @@ def test_ec2_schedule_missing_user_id():
     request.form = {'text': 'i-0df9c53001c5c837d clear'}
     
     result = handle_ec2_schedule(request)
-    assert "Access to instance" in result
-    assert "denied" in result
+    assert "Authentication required" in result
 
 def test_ec2_schedule_empty_user_id():
     """Test schedule with empty user_id"""
@@ -514,8 +532,7 @@ def test_ec2_schedule_empty_user_id():
     request.form = {'user_id': '', 'text': 'i-0df9c53001c5c837d clear'}
     
     result = handle_ec2_schedule(request)
-    assert "Access to instance" in result
-    assert "denied" in result
+    assert "Authentication required" in result
 
 def test_ec2_schedule_case_insensitive_clear():
     """Test schedule clear commands are case insensitive"""

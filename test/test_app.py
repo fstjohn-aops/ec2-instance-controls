@@ -24,25 +24,25 @@ def test_instances_endpoint_missing_params(client):
     """Test instances endpoint with missing parameters"""
     response = client.post('/instances')
     assert response.status_code == 200  # Flask returns 200 even for missing params
-    assert "user_id parameter is required" in response.get_data(as_text=True)
+    assert "Authentication required" in response.get_data(as_text=True)
 
 def test_admin_check_endpoint_missing_params(client):
     """Test admin check endpoint with missing parameters"""
     response = client.post('/admin/check')
     assert response.status_code == 200
-    assert "is not an administrator" in response.get_data(as_text=True)
+    assert "not authenticated" in response.get_data(as_text=True)
 
 def test_ec2_power_endpoint_missing_params(client):
     """Test EC2 power endpoint with missing parameters"""
     response = client.post('/ec2/power')
     assert response.status_code == 200
-    assert "Usage:" in response.get_data(as_text=True)
+    assert "Authentication required" in response.get_data(as_text=True)
 
 def test_ec2_schedule_endpoint_missing_params(client):
     """Test EC2 schedule endpoint with missing parameters"""
     response = client.post('/ec2-schedule')
     assert response.status_code == 200
-    assert "Usage:" in response.get_data(as_text=True)
+    assert "Authentication required" in response.get_data(as_text=True)
 
 def test_ec2_power_state_endpoint_same_as_power(client):
     """Test that ec2-power-state endpoint works the same as ec2/power"""
@@ -64,7 +64,7 @@ def test_instances_endpoint_with_params(client):
         })
         
         assert response.status_code == 200
-        assert "has no assigned instances" in response.get_data(as_text=True)
+        assert "No instances found" in response.get_data(as_text=True)
 
 def test_admin_check_endpoint_with_params(client):
     """Test admin check endpoint with valid parameters"""
@@ -74,7 +74,7 @@ def test_admin_check_endpoint_with_params(client):
     })
     
     assert response.status_code == 200
-    assert "is an administrator" in response.get_data(as_text=True)
+    assert "authenticated and can access all instances" in response.get_data(as_text=True)
 
 def test_ec2_power_endpoint_with_params(client):
     """Test EC2 power endpoint with valid parameters"""
