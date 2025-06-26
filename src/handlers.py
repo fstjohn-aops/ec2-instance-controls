@@ -1,7 +1,7 @@
 import logging
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance
-from src.auth import is_admin, can_control_instance
+from src.auth import is_admin, can_control_instance, get_user_instances
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,10 @@ def handle_help(request):
 • `/admin/check` - Check if a user is an administrator
   Usage: POST with `user_id` and `user_name` parameters
 
+*Instance Management:*
+• `/instances` - List instances assigned to a user with their current states
+  Usage: POST with `user_id` and `user_name` parameters
+
 *EC2 Instance Control:*
 • `/ec2/power` or `/ec2-power-state` - Control EC2 instance power states
   Usage: POST with `user_id` and `text` parameters
@@ -100,3 +104,30 @@ def handle_help(request):
 Note: You can only control instances that are assigned to your user ID."""
     
     return help_text
+
+def handle_list_instances(request):
+    """Handle the list instances endpoint"""
+    user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
+    
+    if not user_id:
+        return "Error: user_id parameter is required."
+    
+    instances = get_user_instances(user_id)
+    
+    if not instances:
+        return f"User `{user_name}` has no assigned instances."
+    
+    # Get current state for each instance
+    instance_states = []
+    for instance_id in instances:
+        state = get_instance_state(instance_id)
+        if state:
+            instance_states.append(f"`{instance_id}` - {state}")
+        else:
+            instance_states.append(f"`{instance_id}` - unknown state")
+    
+    response = f"Instances assigned to `{user_name}`:\n"
+    response += "\n".join(f"• {instance}" for instance in instance_states)
+    
+    return response
