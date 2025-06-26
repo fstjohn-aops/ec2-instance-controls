@@ -1,7 +1,7 @@
 import logging
 import re
 from flask import jsonify
-from src.aws_client import get_instance_state, start_instance, stop_instance
+from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
 from src.auth import is_admin, can_control_instance, get_user_instances
 
 logger = logging.getLogger(__name__)
@@ -27,45 +27,61 @@ def handle_ec2_power(request):
     user_id = request.form.get('user_id', '')
     text = request.form.get('text', '').strip()
     
-    # Parse text: "i-0df9c53001c5c837d" or "i-0df9c53001c5c837d on"
+    # Parse text: "instance-id" or "instance-name" or "instance-id on" or "instance-name on"
     parts = text.split()
     
     if len(parts) == 1:
-        # Just instance ID - return current state
-        instance_id = parts[0]
+        # Just instance identifier - return current state
+        instance_identifier = parts[0]
         
-        # Check if user can control this instance (even if format is invalid)
-        if not can_control_instance(user_id, instance_id):
-            return f"Access to instance `{instance_id}` denied."
+        # Check if user can control this instance
+        if not can_control_instance(user_id, instance_identifier):
+            return f"Access to instance `{instance_identifier}` denied."
         
-        # Get current state (this will fail for invalid formats, but that's expected)
+        # Resolve to instance ID
+        instance_id = resolve_instance_identifier(instance_identifier)
+        if not instance_id:
+            return f"Instance `{instance_identifier}` not found"
+        
+        # Get current state using the resolved instance ID
+        logger.info(f"Calling get_instance_state with resolved instance_id: {instance_id}")
         current_state = get_instance_state(instance_id)
         if current_state:
-            return f"Instance `{instance_id}` is currently {current_state}"
+            # Get instance name for display if available
+            instance_name = get_instance_name(instance_id)
+            display_name = instance_name if instance_name else instance_id
+            return f"Instance `{display_name}` ({instance_id}) is currently {current_state}"
         else:
-            return f"Instance `{instance_id}` not found"
+            return f"Instance `{instance_identifier}` not found"
     
     elif len(parts) == 2:
-        # Instance ID and power state - change state
-        instance_id, power_state = parts
+        # Instance identifier and power state - change state
+        instance_identifier, power_state = parts
         
-        # Validate instance ID format first
-        if not _is_valid_instance_id(instance_id):
-            return "Usage: <instance-id> [on|off]"
+        # Check if user can control this instance
+        if not can_control_instance(user_id, instance_identifier):
+            return f"Access to instance `{instance_identifier}` denied."
         
-        if not can_control_instance(user_id, instance_id):
-            return f"Access to instance `{instance_id}` denied."
+        # Resolve to instance ID
+        instance_id = resolve_instance_identifier(instance_identifier)
+        if not instance_id:
+            return f"Instance `{instance_identifier}` not found"
         
         if power_state not in ['on', 'off']:
             return "Power state must be 'on' or 'off'."
         
+        # Get instance name for display if available
+        instance_name = get_instance_name(instance_id)
+        display_name = instance_name if instance_name else instance_id
+        
         # Respond immediately
         response = jsonify({
             'response_type': 'ephemeral',
-            'text': f"Set `{instance_id}` to {power_state}"
+            'text': f"Set `{display_name}` ({instance_id}) to {power_state}"
         })
         
-        # Then do the AWS operation
+        # Then do the AWS operation using the resolved instance ID
+        logger.info(f"Calling get_instance_state with resolved instance_id: {instance_id}")
         current_state = get_instance_state(instance_id)
         if current_state:
             logger.info(f"AWS: Instance `{instance_id}` current state is {current_state}")
@@ -81,7 +97,7 @@ def handle_ec2_power(request):
         return response
     
     else:
-        return "Usage: <instance-id> [on|off]"
+        return "Usage: <instance-id|instance-name> [on|off]"
 
 def handle_list_instances(request):
     """Handle the list instances endpoint"""
@@ -100,10 +116,18 @@ def handle_list_instances(request):
     instance_states = []
     for instance_id in instances:
         state = get_instance_state(instance_id)
+        instance_name = get_instance_name(instance_id)
+        
         if state:
-            instance_states.append(f"`{instance_id}` - {state}")
+            if instance_name:
+                instance_states.append(f"`{instance_name}` ({instance_id}) - {state}")
+            else:
+                instance_states.append(f"`{instance_id}` - {state}")
         else:
-            instance_states.append(f"`{instance_id}` - unknown state")
+            if instance_name:
+                instance_states.append(f"`{instance_name}` ({instance_id}) - unknown state")
+            else:
+                instance_states.append(f"`{instance_id}` - unknown state")
     
     response = f"Instances assigned to `{user_name}`:\n"
     response += "\n".join(f"• {instance}" for instance in instance_states)

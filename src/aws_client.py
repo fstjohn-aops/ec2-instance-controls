@@ -26,6 +26,7 @@ else:
 
 def get_instance_state(instance_id):
     """Get the current state of an EC2 instance"""
+    logger.info(f"get_instance_state called with instance_id: {instance_id}")
     try:
         response = ec2_client.describe_instances(InstanceIds=[instance_id])
         if response['Reservations']:
@@ -54,4 +55,84 @@ def stop_instance(instance_id):
         return True
     except Exception as e:
         logger.error(f"AWS Error stopping instance: {e}")
-        return False 
+        return False
+
+def get_instance_by_name(instance_name):
+    """Find an EC2 instance by its Name tag"""
+    try:
+        logger.info(f"Searching for instance with Name tag: {instance_name}")
+        response = ec2_client.describe_instances(
+            Filters=[
+                {
+                    'Name': 'tag:Name',
+                    'Values': [instance_name]
+                },
+                {
+                    'Name': 'instance-state-name',
+                    'Values': ['pending', 'running', 'stopping', 'stopped']
+                }
+            ]
+        )
+        
+        instances = []
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                instances.append(instance)
+        
+        logger.info(f"Found {len(instances)} instances with name '{instance_name}'")
+        
+        if len(instances) == 1:
+            instance_id = instances[0]['InstanceId']
+            logger.info(f"Returning single instance: {instance_id}")
+            return instances[0]
+        elif len(instances) > 1:
+            instance_ids = [i['InstanceId'] for i in instances]
+            logger.warning(f"Multiple instances found with name '{instance_name}': {instance_ids}")
+            return None
+        else:
+            logger.warning(f"No instances found with name '{instance_name}'")
+            return None
+    except Exception as e:
+        logger.error(f"AWS Error finding instance by name '{instance_name}': {e}")
+        return None
+
+def get_instance_details(instance_id):
+    """Get detailed information about an EC2 instance including Name tag"""
+    try:
+        response = ec2_client.describe_instances(InstanceIds=[instance_id])
+        if response['Reservations']:
+            instance = response['Reservations'][0]['Instances'][0]
+            return instance
+        return None
+    except Exception as e:
+        logger.error(f"AWS Error getting instance details: {e}")
+        return None
+
+def get_instance_name(instance_id):
+    """Get the Name tag of an EC2 instance"""
+    instance = get_instance_details(instance_id)
+    if instance and 'Tags' in instance:
+        for tag in instance['Tags']:
+            if tag['Key'] == 'Name':
+                return tag['Value']
+    return None
+
+def resolve_instance_identifier(identifier):
+    """Resolve an instance identifier (ID or Name) to instance ID"""
+    logger.info(f"Resolving instance identifier: {identifier}")
+    
+    # If it looks like an instance ID, return it directly
+    if identifier.startswith('i-'):
+        logger.info(f"Identifier '{identifier}' looks like an instance ID, returning directly")
+        return identifier
+    
+    # Otherwise, treat it as a Name tag
+    logger.info(f"Treating '{identifier}' as instance name, looking up by Name tag")
+    instance = get_instance_by_name(identifier)
+    if instance:
+        instance_id = instance['InstanceId']
+        logger.info(f"Found instance '{identifier}' with ID: {instance_id}")
+        return instance_id
+    else:
+        logger.warning(f"No instance found with name: {identifier}")
+        return None
