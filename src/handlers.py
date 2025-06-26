@@ -40,11 +40,6 @@ def handle_ec2_power(request):
     user_name = request.form.get('user_name', 'Unknown')
     text = request.form.get('text', '').strip()
     
-    # Check if user is authenticated
-    if not user_id:
-        _log_user_action(user_id, user_name, "ec2_power", "unknown", {"error": "authentication_required"}, False)
-        return "Error: Authentication required. Please ensure you're logged into Slack."
-    
     # Parse text: "instance-id" or "instance-name" or "instance-id on" or "instance-name on"
     parts = text.split()
     
@@ -154,10 +149,6 @@ def handle_list_instances(request):
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     
-    if not user_id:
-        _log_user_action(user_id, user_name, "list_instances", "unknown", {"error": "authentication_required"}, False)
-        return "Error: Authentication required. Please ensure you're logged into Slack."
-    
     instances = get_user_instances(user_id)
     
     if not instances:
@@ -205,11 +196,6 @@ def handle_ec2_schedule(request):
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     text = request.form.get('text', '').strip()
-    
-    # Check if user is authenticated
-    if not user_id:
-        _log_user_action(user_id, user_name, "ec2_schedule", "unknown", {"error": "authentication_required"}, False)
-        return "Error: Authentication required. Please ensure you're logged into Slack."
     
     # Parse text: "instance-id" or "instance-name" or "instance-id start_time to stop_time" or "instance-id clear"
     parts = text.split()

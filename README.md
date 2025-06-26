@@ -7,7 +7,6 @@ A Kubernetes-native Slack bot for managing EC2 instances through Slack commands.
 - **Slack Integration**: Control EC2 instances directly from Slack
 - **EC2 Power Management**: Start, stop, and check status of EC2 instances
 - **Instance Scheduling**: Schedule automatic start/stop of instances
-- **User Access Control**: Role-based access to specific instances
 - **Audit Logging**: Comprehensive logging of all operations
 - **Kubernetes Native**: Designed for EKS with IAM roles for service accounts
 
@@ -156,7 +155,6 @@ The deployment creates several Kubernetes resources:
 - **IAM Roles**: Uses EKS service accounts for AWS authentication
 - **No Hardcoded Credentials**: All AWS access through IAM roles
 - **Audit Logging**: All operations logged with user context
-- **Role-Based Access**: Users can only access authorized instances
 - **IP Whitelist**: Ingress restricted to office IP addresses
 - **TLS Encryption**: HTTPS with Let's Encrypt certificates
 

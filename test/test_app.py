@@ -24,19 +24,19 @@ def test_instances_endpoint_missing_params(client):
     """Test instances endpoint with missing parameters"""
     response = client.post('/instances')
     assert response.status_code == 200  # Flask returns 200 even for missing params
-    assert "Authentication required" in response.get_data(as_text=True)
+    # No authentication check anymore, so it should work without user_id
 
 def test_ec2_power_endpoint_missing_params(client):
     """Test EC2 power endpoint with missing parameters"""
     response = client.post('/ec2/power')
     assert response.status_code == 200
-    assert "Authentication required" in response.get_data(as_text=True)
+    # No authentication check anymore, so it should work without user_id
 
 def test_ec2_schedule_endpoint_missing_params(client):
     """Test EC2 schedule endpoint with missing parameters"""
     response = client.post('/ec2-schedule')
     assert response.status_code == 200
-    assert "Authentication required" in response.get_data(as_text=True)
+    # No authentication check anymore, so it should work without user_id
 
 def test_ec2_power_state_endpoint_same_as_power(client):
     """Test that ec2-power-state endpoint works the same as ec2/power"""

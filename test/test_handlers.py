@@ -7,22 +7,14 @@ from src.schedule import parse_time, format_schedule_display
 # Create a test Flask app
 app = Flask(__name__)
 
-def test_ec2_power_missing_user_id():
-    """Test EC2 power with missing user_id"""
-    request = Mock()
-    request.form = {'text': 'i-1234567890abcdef0'}
-    
-    result = handle_ec2_power(request)
-    assert "Authentication required" in result
-
 # Instance list tests
 def test_list_instances_with_instances():
-    """Test listing instances when user has assigned instances"""
+    """Test listing instances with valid instances"""
     with patch('src.handlers.get_user_instances') as mock_get_instances, \
          patch('src.handlers.get_instance_state') as mock_get_state, \
          patch('src.handlers.get_instance_name') as mock_get_name:
         
-        mock_get_instances.return_value = ['i-0df9c53001c5c837d', 'i-0fff0f1804788ae88']
+        mock_get_instances.return_value = ['i-1234567890abcdef0', 'i-0987654321fedcba0']
         mock_get_state.side_effect = ['running', 'stopped']
         mock_get_name.side_effect = ['test-instance-1', 'test-instance-2']
         
@@ -30,7 +22,7 @@ def test_list_instances_with_instances():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_list_instances(request)
-        assert "All instances in AWS region" in result
+        assert "All instances in AWS region:" in result
         assert "test-instance-1" in result
         assert "test-instance-2" in result
         assert "running" in result
@@ -46,14 +38,6 @@ def test_list_instances_no_instances():
         
         result = handle_list_instances(request)
         assert "No instances found" in result
-
-def test_list_instances_missing_user_id():
-    """Test listing instances with missing user_id"""
-    request = Mock()
-    request.form = {'user_name': 'fstjohn'}
-    
-    result = handle_list_instances(request)
-    assert "Authentication required" in result
 
 def test_list_instances_instance_state_unknown():
     """Test listing instances when instance state is unknown"""
@@ -492,22 +476,6 @@ def test_ec2_schedule_missing_text():
     
     result = handle_ec2_schedule(request)
     assert "Usage:" in result
-
-def test_ec2_schedule_missing_user_id():
-    """Test schedule with missing user_id"""
-    request = Mock()
-    request.form = {'text': 'i-0df9c53001c5c837d clear'}
-    
-    result = handle_ec2_schedule(request)
-    assert "Authentication required" in result
-
-def test_ec2_schedule_empty_user_id():
-    """Test schedule with empty user_id"""
-    request = Mock()
-    request.form = {'user_id': '', 'text': 'i-0df9c53001c5c837d clear'}
-    
-    result = handle_ec2_schedule(request)
-    assert "Authentication required" in result
 
 def test_ec2_schedule_case_insensitive_clear():
     """Test schedule clear commands are case insensitive"""
