@@ -283,9 +283,8 @@ def test_ec2_schedule_get_with_schedule():
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_name') as mock_get_name:
             mock_get_schedule.return_value = {
-                'start_schedule': 'cron(0 9 * * ? *)',
-                'stop_schedule': 'cron(0 17 * * ? *)',
-                'timezone': 'UTC'
+                'start_time': '09:00',
+                'stop_time': '17:00'
             }
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
