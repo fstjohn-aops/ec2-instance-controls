@@ -34,14 +34,11 @@ def handle_ec2_power(request):
         # Just instance ID - return current state
         instance_id = parts[0]
         
-        # Validate instance ID format first
-        if not _is_valid_instance_id(instance_id):
-            return "Usage: <instance-id> [on|off]"
-        
+        # Check if user can control this instance (even if format is invalid)
         if not can_control_instance(user_id, instance_id):
             return f"Access to instance `{instance_id}` denied."
         
-        # Get current state
+        # Get current state (this will fail for invalid formats, but that's expected)
         current_state = get_instance_state(instance_id)
         if current_state:
             return f"Instance `{instance_id}` is currently {current_state}"
