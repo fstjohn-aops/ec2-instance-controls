@@ -8,6 +8,10 @@ logger = logging.getLogger(__name__)
 
 def handle_admin_check(request):
     """Handle the admin check endpoint"""
+    import json
+    payload = {k: v for k, v in request.form.items()}
+    logger.info(f"Slack payload: {json.dumps(payload, indent=2)}")
+    
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     
