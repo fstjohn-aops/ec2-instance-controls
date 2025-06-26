@@ -54,3 +54,5 @@ Point your Slack app to `http://your-server:8000/api/slack/test` and check the l
    - like what happens if it's in "stopping"
 - make it so it dynamically loads the data (just use a database?)
 - make sure the server is running a "production WSGI server" instead
+- add logic to regularly check if all of the ec2 instances still exist and 
+update the config
