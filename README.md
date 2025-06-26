@@ -1,14 +1,15 @@
 # EC2 Instance Control App
 
-A Flask application for managing EC2 instances through Slack integration. Users can check instance status, start/stop instances, and list their assigned instances.
+A Flask application for managing EC2 instances through Slack integration. Any authenticated Slack user can check instance status, start/stop instances, and list all instances in the AWS region.
 
 ## Features
 
 - **Instance Status Check**: Get current state of EC2 instances
 - **Power Control**: Start or stop EC2 instances
-- **User Permissions**: Role-based access control with admin and user roles
+- **Universal Access**: Any authenticated Slack user can manage all instances
 - **Slack Integration**: Responds with ephemeral messages for clean UX
 - **Health Monitoring**: Health check endpoint for monitoring
+- **Instance Scheduling**: Set automatic start/stop schedules for instances
 
 ## Setup
 
@@ -70,12 +71,12 @@ All endpoints accept POST requests with form data.
 ### Instance Management
 - **Endpoint**: `POST /instances`
 - **Parameters**: `user_id`, `user_name`
-- **Function**: Lists all instances assigned to the user with their current states
+- **Function**: Lists all instances in the AWS region with their current states
 
-### Admin Check
+### Authentication Check
 - **Endpoint**: `POST /admin/check`
 - **Parameters**: `user_id`, `user_name`
-- **Function**: Checks if a user has admin privileges
+- **Function**: Verifies if a user is authenticated and can access instances
 
 ### EC2 Power Control
 - **Endpoints**: `POST /ec2/power` or `POST /ec2-power-state`
@@ -84,6 +85,8 @@ All endpoints accept POST requests with form data.
   - `i-1234567890abcdef0` - Check instance status
   - `i-1234567890abcdef0 on` - Start instance
   - `i-1234567890abcdef0 off` - Stop instance
+  - `instance-name` - Use instance name instead of ID
+  - `instance-name on` - Start instance by name
 
 ### EC2 Schedule Control
 - **Endpoint**: `POST /ec2-schedule`
@@ -98,17 +101,16 @@ All endpoints accept POST requests with form data.
   - `5pm`, `5:30pm`, `17:00`, `17:30` - 12-hour and 24-hour formats
   - Flexible parsing using python-dateutil library
 - **Clear Commands**: `clear`, `reset`, `unset`, `no`, `remove`, `delete` (all equivalent)
-- **AWS Integration**: Uses AWS Instance Scheduler tags on EC2 instances
 
 **Usage:** `/ec2-schedule <instance> [<start> to <stop>]` or `/ec2-schedule <instance> clear`
 
-## User Permissions
+## Access Control
 
-The application uses a role-based access control system:
+The application uses a simplified access control system:
 
-- **Admin Users**: Can control any instance (configured in `src/config.py`)
-- **Regular Users**: Can only control their assigned instances
-- **Instance Assignment**: Users are mapped to specific EC2 instances in the configuration
+- **Authentication Required**: Users must be logged into Slack and provide a `user_id`
+- **Universal Access**: Any authenticated user can manage all EC2 instances in the configured AWS region
+- **No User Restrictions**: No role-based permissions or instance assignments - all users have equal access
 
 ## Testing
 
@@ -119,11 +121,10 @@ Run the test suite:
 
 ## Configuration
 
-### User Management
+### AWS Configuration
 Edit `src/config.py` to:
-- Add/remove admin users
-- Assign EC2 instances to users
 - Configure AWS region
+- Set default region for EC2 operations
 
 ### AWS Permissions
 The application requires the following AWS permissions:
@@ -138,10 +139,11 @@ The application requires the following AWS permissions:
 ec2-instance-controls/
 ├── app.py              # Main Flask application
 ├── src/
-│   ├── auth.py         # User authentication and permissions
+│   ├── auth.py         # User authentication (simplified)
 │   ├── aws_client.py   # AWS EC2 operations
-│   ├── config.py       # Configuration and user mappings
-│   └── handlers.py     # Request handlers
+│   ├── config.py       # Configuration (AWS region only)
+│   ├── handlers.py     # Request handlers
+│   └── schedule.py     # Instance scheduling
 ├── test/               # Test files
 ├── requirements.txt    # Python dependencies
 └── setup.sh           # Setup script
@@ -155,7 +157,7 @@ ec2-instance-controls/
 
 ## Todo
 
-- Add group RBAC
+- Add group RBAC (if needed in the future)
 - Add default instance ID for some users
 - Use tags instead of hardcoded instance IDs
 - Allow users to use IP address and other identifiers
