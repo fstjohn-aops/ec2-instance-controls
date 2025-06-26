@@ -98,20 +98,7 @@ curl -X POST http://localhost:8000/instances \
   -d "user_id=U123456&user_name=john"
 ```
 
-## Development
-
-### Local Testing
-
-For local development, you can run the application directly:
-
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-### Building New Image
-
-To update the application:
+## Updating the Application
 
 ```bash
 export IMAGE_TAG="v1.1"
@@ -162,7 +149,3 @@ kubectl describe pod -l app=ec2-instance-controls -n ec2-controls
 # Check AWS credentials in pod
 kubectl exec -it deployment/ec2-instance-controls -n ec2-controls -- env | grep AWS
 ```
-
-## License
-
-[Add your license here]
