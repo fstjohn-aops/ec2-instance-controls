@@ -5,7 +5,7 @@ Simple Flask App
 
 from flask import Flask, request
 import logging
-from src.handlers import handle_admin_check, handle_ec2_power, handle_help, handle_list_instances
+from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -13,10 +13,6 @@ logging.basicConfig(level=logging.INFO)
 @app.route('/health')
 def health():
     return {'status': 'ok'}
-
-@app.route('/help', methods=['GET', 'POST'])
-def help():
-    return handle_help(request)
 
 @app.route('/instances', methods=['POST'])
 def list_instances():
