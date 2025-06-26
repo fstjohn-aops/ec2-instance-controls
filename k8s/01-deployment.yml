@@ -45,9 +45,6 @@ spec:
                 configMapKeyRef:
                   name: ec2-slack-bot-config
                   key: SCHEDULE_DIR
-          volumeMounts:
-            - name: schedule-storage
-              mountPath: /app/schedules
           resources:
             requests:
               cpu: "100m"
@@ -79,9 +76,5 @@ spec:
             capabilities:
               drop:
                 - ALL
-      volumes:
-        - name: schedule-storage
-          persistentVolumeClaim:
-            claimName: schedule-pvc
       securityContext:
         fsGroup: 10001 
