@@ -1,9 +1,5 @@
 from src.aws_client import get_all_instances
 
-def is_admin(user_id):
-    """Check if user is an administrator - now just checks if user_id is provided"""
-    return bool(user_id)
-
 def can_control_instance(user_id, instance_identifier):
     """Check if user can control the specified instance - now allows any authenticated user"""
     # Any user with a user_id can control any instance

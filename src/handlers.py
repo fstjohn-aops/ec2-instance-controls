@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
-from src.auth import is_admin, get_user_instances
+from src.auth import get_user_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 import os
 
@@ -27,18 +27,6 @@ def _log_user_action(user_id, user_name, action, target, details=None, success=T
         'deployment': os.environ.get('DEPLOYMENT_NAME', 'unknown')
     }
     logger.info(f"AUDIT: {json.dumps(log_entry)}")
-
-def handle_admin_check(request):
-    """Handle the admin check endpoint"""
-    user_id = request.form.get('user_id', '')
-    user_name = request.form.get('user_name', 'Unknown')
-    
-    _log_user_action(user_id, user_name, "admin_check", "system", {"authenticated": bool(user_id)})
-    
-    if is_admin(user_id):
-        return f"User: `{user_name}` is authenticated and can access all instances."
-    else:
-        return f"User: `{user_name}` is not authenticated."
 
 def _is_valid_instance_id(instance_id):
     """Validate EC2 instance ID format"""

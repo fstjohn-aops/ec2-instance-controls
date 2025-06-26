@@ -1,44 +1,19 @@
 import pytest
 from unittest.mock import Mock, patch
 from flask import Flask
-from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances, handle_ec2_schedule
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule
 from src.schedule import parse_time, format_schedule_display
 
 # Create a test Flask app
 app = Flask(__name__)
 
-# Admin check tests
-def test_admin_check_admin():
-    """Test admin check for authenticated user"""
+def test_ec2_power_missing_user_id():
+    """Test EC2 power with missing user_id"""
     request = Mock()
-    request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
+    request.form = {'text': 'i-1234567890abcdef0'}
     
-    result = handle_admin_check(request)
-    assert "authenticated and can access all instances" in result
-
-def test_admin_check_non_admin():
-    """Test admin check for authenticated user (any user with user_id is now an admin)"""
-    request = Mock()
-    request.form = {'user_id': 'U123456789', 'user_name': 'otheruser'}
-    
-    result = handle_admin_check(request)
-    assert "authenticated and can access all instances" in result
-
-def test_admin_check_missing_user_id():
-    """Test admin check with missing user_id"""
-    request = Mock()
-    request.form = {'user_name': 'fstjohn'}
-    
-    result = handle_admin_check(request)
-    assert "not authenticated" in result
-
-def test_admin_check_empty_user_id():
-    """Test admin check with empty user_id"""
-    request = Mock()
-    request.form = {'user_id': '', 'user_name': 'fstjohn'}
-    
-    result = handle_admin_check(request)
-    assert "not authenticated" in result
+    result = handle_ec2_power(request)
+    assert "Authentication required" in result
 
 # Instance list tests
 def test_list_instances_with_instances():

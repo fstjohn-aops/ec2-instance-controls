@@ -7,7 +7,7 @@ from flask import Flask, request
 import logging
 import json
 from datetime import datetime
-from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances, handle_ec2_schedule
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule
 import os
 
 app = Flask(__name__)
@@ -85,10 +85,6 @@ def health():
 @app.route('/instances', methods=['POST'])
 def list_instances():
     return handle_list_instances(request)
-
-@app.route('/admin/check', methods=['POST'])
-def admin_check():
-    return handle_admin_check(request)
 
 @app.route('/ec2/power', methods=['POST'])
 def set_ec2_power():
