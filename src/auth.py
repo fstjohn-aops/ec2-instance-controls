@@ -6,6 +6,11 @@ def is_admin(user_id):
 
 def can_control_instance(user_id, instance_id):
     """Check if user can control the specified instance"""
+    # Admins can control any instance
+    if is_admin(user_id):
+        return True
+    
+    # Regular users can only control their assigned instances
     return user_id in USER_INSTANCES and instance_id in USER_INSTANCES[user_id]
 
 def get_user_instances(user_id):
