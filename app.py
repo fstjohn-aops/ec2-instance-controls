@@ -3,99 +3,24 @@
 Simple Flask App
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import logging
-import boto3
+from src.handlers import handle_admin_check, handle_ec2_power
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# Admin user IDs
-ADMIN_USERS = {"U08QYU6AX0V"}
-
-# User to EC2 instances mapping
-USER_INSTANCES = {
-    "U08QYU6AX0V": ["i-0df9c53001c5c837d"]
-}
-
-# Initialize AWS client
-ec2_client = boto3.client('ec2', region_name='us-west-2')
-
 @app.route('/health')
 def health():
-    return jsonify({'status': 'ok'})
-
-@app.route('/slack/test', methods=['POST'])
-def slack_test():
-    app.logger.info("=== SLACK REQUEST ===")
-    app.logger.info(dict(request.form))
-    app.logger.info("====================")
-    
-    return jsonify({
-        'message': 'Slack data received',
-        'headers': dict(request.headers),
-        'data': request.get_data(as_text=True)
-    })
+    return {'status': 'ok'}
 
 @app.route('/admin/check', methods=['POST'])
 def admin_check():
-    user_id = request.form.get('user_id', '')
-    user_name = request.form.get('user_name', 'Unknown')
-    
-    if user_id in ADMIN_USERS:
-        return f"User: `{user_name}` is an administrator."
-    else:
-        return f"User: `{user_name}` is not an administrator."
+    return handle_admin_check(request)
 
 @app.route('/ec2/power', methods=['POST'])
 def set_ec2_power():
-    user_id = request.form.get('user_id', '')
-    text = request.form.get('text', '').strip()
-    
-    if user_id not in ADMIN_USERS:
-        return "Only administrators can control EC2 instances."
-    
-    # Parse text: "i-057cf7b437a182811 on"
-    parts = text.split()
-    if len(parts) != 2:
-        return "Usage: <instance-id> <on|off>"
-    
-    instance_id, power_state = parts
-    
-    if user_id not in USER_INSTANCES or instance_id not in USER_INSTANCES[user_id]:
-        return "You don't have permission to control this instance."
-    
-    if power_state not in ['on', 'off']:
-        return "Power state must be 'on' or 'off'."
-    
-    # Respond immediately
-    response = jsonify({
-        'response_type': 'ephemeral',
-        'text': f"Set `{instance_id}` to {power_state}"
-    })
-    
-    # Then do the AWS operation
-    try:
-        # First get current state
-        aws_response = ec2_client.describe_instances(InstanceIds=[instance_id])
-        if aws_response['Reservations']:
-            instance = aws_response['Reservations'][0]['Instances'][0]
-            current_state = instance['State']['Name']
-            app.logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
-            
-            # Then change the state
-            if power_state == 'on':
-                ec2_client.start_instances(InstanceIds=[instance_id])
-                app.logger.info(f"AWS: Started {instance_id}")
-            else:
-                ec2_client.stop_instances(InstanceIds=[instance_id])
-                app.logger.info(f"AWS: Stopped {instance_id}")
-        else:
-            app.logger.error(f"AWS: Instance {instance_id} not found")
-    except Exception as e:
-        app.logger.error(f"AWS Error: {e}")
-    
-    return response
+    return handle_ec2_power(request)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)

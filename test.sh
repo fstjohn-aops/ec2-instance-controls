@@ -1,11 +1,6 @@
 #!/bin/bash
 
-# Simple script to run tests for the EC2 Instance Control Flask App
-
-echo "Running tests for EC2 Instance Control App..."
-
-# Set test mode
-export TEST_MODE=true
+echo "Running EC2 Instance Control App tests..."
 
 # Activate virtual environment if it exists
 if [ -d "venv" ]; then
@@ -13,4 +8,4 @@ if [ -d "venv" ]; then
 fi
 
 # Run tests
-python3 -m pytest test_app.py -v 
+python3 test_app.py 
