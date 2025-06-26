@@ -10,7 +10,7 @@ app = Flask(__name__)
 # Instance list tests
 def test_list_instances_with_instances():
     """Test listing instances with valid instances"""
-    with patch('src.handlers.get_user_instances') as mock_get_instances, \
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances, \
          patch('src.handlers.get_instance_state') as mock_get_state, \
          patch('src.handlers.get_instance_name') as mock_get_name:
         
@@ -29,8 +29,8 @@ def test_list_instances_with_instances():
         assert "stopped" in result
 
 def test_list_instances_no_instances():
-    """Test listing instances when user has no assigned instances"""
-    with patch('src.handlers.get_user_instances') as mock_get_instances:
+    """Test listing instances when no instances exist in the region"""
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances:
         mock_get_instances.return_value = []
         
         request = Mock()
@@ -41,7 +41,7 @@ def test_list_instances_no_instances():
 
 def test_list_instances_instance_state_unknown():
     """Test listing instances when instance state is unknown"""
-    with patch('src.handlers.get_user_instances') as mock_get_instances, \
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances, \
          patch('src.handlers.get_instance_state') as mock_get_state, \
          patch('src.handlers.get_instance_name') as mock_get_name:
         

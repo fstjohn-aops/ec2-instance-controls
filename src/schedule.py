@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from dateutil import parser
 import json
 import os
@@ -17,9 +17,9 @@ if not os.environ.get('TESTING'):
     except OSError:
         logger.warning(f"Could not create schedule directory {SCHEDULE_DIR}")
 
-def _log_schedule_operation(operation, instance_id, details=None, success=True):
+def _log_schedule_operation(operation, instance_id, details=None, success=True, error=None):
     """Log schedule operations for auditing purposes"""
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     status = "SUCCESS" if success else "FAILED"
     log_entry = {
         'timestamp': timestamp,
@@ -30,6 +30,9 @@ def _log_schedule_operation(operation, instance_id, details=None, success=True):
         'pod_name': os.environ.get('HOSTNAME', 'unknown'),
         'namespace': os.environ.get('POD_NAMESPACE', 'unknown')
     }
+    if error:
+        log_entry['error'] = str(error)
+    
     logger.info(f"SCHEDULE_AUDIT: {json.dumps(log_entry)}")
 
 def _load_schedules():

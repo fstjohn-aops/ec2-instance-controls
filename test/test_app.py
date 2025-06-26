@@ -13,7 +13,10 @@ def test_health_endpoint(client):
     """Test the health check endpoint"""
     response = client.get('/health')
     assert response.status_code == 200
-    assert response.json == {'status': 'ok'}
+    data = response.json
+    assert data['status'] == 'healthy'
+    assert 'timestamp' in data
+    assert data['service'] == 'ec2-instance-controls'
 
 def test_health_endpoint_post_method_not_allowed(client):
     """Test that POST method is not allowed on health endpoint"""
@@ -49,7 +52,7 @@ def test_ec2_power_state_endpoint_same_as_power(client):
 
 def test_instances_endpoint_with_params(client):
     """Test instances endpoint with valid parameters"""
-    with patch('src.handlers.get_user_instances') as mock_get_instances:
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances:
         mock_get_instances.return_value = []
         
         response = client.post('/instances', data={

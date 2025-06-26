@@ -1,10 +1,10 @@
 import logging
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
-from src.auth import get_user_instances
+from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 import os
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def _log_user_action(user_id, user_name, action, target, details=None, success=True):
     """Log user actions for auditing purposes"""
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     status = "SUCCESS" if success else "FAILED"
     log_entry = {
         'timestamp': timestamp,
@@ -145,11 +145,11 @@ def handle_ec2_power(request):
         return "Usage: <instance-id|instance-name> [on|off]"
 
 def handle_list_instances(request):
-    """Handle the list instances endpoint"""
+    """Handle the list instances endpoint - returns all instances in the AWS region"""
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     
-    instances = get_user_instances(user_id)
+    instances = get_all_region_instances()
     
     if not instances:
         _log_user_action(user_id, user_name, "list_instances", "all", {"instance_count": 0})

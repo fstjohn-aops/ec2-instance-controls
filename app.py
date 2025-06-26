@@ -6,7 +6,7 @@ Simple Flask App
 from flask import Flask, request
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule
 import os
 
@@ -33,10 +33,13 @@ class StructuredFormatter(logging.Formatter):
         # Regular log message formatting
         return super().format(record)
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
 )
 
 # Apply structured formatter to root logger
@@ -44,9 +47,11 @@ root_logger = logging.getLogger()
 for handler in root_logger.handlers:
     handler.setFormatter(StructuredFormatter())
 
+logger = logging.getLogger(__name__)
+
 def _log_request():
     """Log incoming requests for auditing purposes"""
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     user_id = request.form.get('user_id', 'unknown')
     user_name = request.form.get('user_name', 'unknown')
     
@@ -78,9 +83,15 @@ def before_request():
     """Log all incoming requests"""
     _log_request()
 
-@app.route('/health')
+@app.route('/health', methods=['GET'])
 def health():
-    return {'status': 'ok'}
+    """Health check endpoint"""
+    timestamp = datetime.now(timezone.utc).isoformat()
+    return {
+        'status': 'healthy',
+        'timestamp': timestamp,
+        'service': 'ec2-instance-controls'
+    }
 
 @app.route('/instances', methods=['POST'])
 def list_instances():

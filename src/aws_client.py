@@ -2,33 +2,37 @@ import boto3
 import logging
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from src.config import AWS_REGION
 
 logger = logging.getLogger(__name__)
 
-# Get credentials from environment variables
-aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-aws_region = os.environ.get('AWS_REGION', AWS_REGION)
+# Get AWS region from environment variable
+aws_region = os.environ.get('AWS_REGION', 'us-east-1')
 
-# Initialize AWS client with explicit credentials
-if aws_access_key_id and aws_secret_access_key:
-    ec2_client = boto3.client(
-        'ec2',
-        aws_access_key_id=aws_access_key_id,
-        aws_secret_access_key=aws_secret_access_key,
-        region_name=aws_region
-    )
-    logger.info(f"AWS client initialized with explicit credentials for region: {aws_region}")
-else:
-    # Fallback to default credential chain (instance role, etc.)
-    ec2_client = boto3.client('ec2', region_name=aws_region)
-    logger.warning("AWS credentials not found in environment variables, using default credential chain")
+# Initialize AWS EC2 client
+try:
+    # Try to get credentials from environment variables first
+    aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    
+    if aws_access_key_id and aws_secret_access_key:
+        ec2_client = boto3.client('ec2', 
+                                 region_name=aws_region,
+                                 aws_access_key_id=aws_access_key_id,
+                                 aws_secret_access_key=aws_secret_access_key)
+        logger.info("AWS credentials found in environment variables")
+    else:
+        # Fallback to default credential chain (instance role, etc.)
+        ec2_client = boto3.client('ec2', region_name=aws_region)
+        logger.warning("AWS credentials not found in environment variables, using default credential chain")
+except Exception as e:
+    logger.error(f"Failed to initialize AWS client: {e}")
+    raise
 
 def _log_aws_operation(operation, target, details=None, success=True, error=None):
     """Log AWS operations for auditing purposes"""
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
     status = "SUCCESS" if success else "FAILED"
     log_entry = {
         'timestamp': timestamp,
