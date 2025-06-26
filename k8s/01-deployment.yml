@@ -72,4 +72,4 @@ spec:
               drop:
                 - ALL
       securityContext:
-        fsGroup: 10001 
+        fsGroup: 10001
