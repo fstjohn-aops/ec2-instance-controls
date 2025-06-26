@@ -1,182 +1,168 @@
-# EC2 Instance Control App
+# EC2 Instance Controls
 
-A Flask application for managing EC2 instances through Slack integration. Any authenticated Slack user can check instance status, start/stop instances, and list all instances in the AWS region.
+A Kubernetes-native application for managing EC2 instances through HTTP APIs. Designed to run on Amazon EKS with IAM roles for service accounts.
 
 ## Features
 
-- **Instance Status Check**: Get current state of EC2 instances
-- **Power Control**: Start or stop EC2 instances
-- **Universal Access**: Any authenticated Slack user can manage all instances
-- **Slack Integration**: Responds with ephemeral messages for clean UX
-- **Health Monitoring**: Health check endpoint for monitoring
-- **Instance Scheduling**: Set automatic start/stop schedules for instances
+- **EC2 Power Management**: Start, stop, and check status of EC2 instances
+- **Instance Scheduling**: Schedule automatic start/stop of instances
+- **User Access Control**: Role-based access to specific instances
+- **Audit Logging**: Comprehensive logging of all operations
+- **Kubernetes Native**: Designed for EKS with IAM roles for service accounts
 
-## Setup
+## Architecture
 
-### Quick Setup
+- **Flask Application**: HTTP API server
+- **AWS SDK**: EC2 operations using IAM roles
+- **Persistent Storage**: Schedules stored in EBS volumes
+- **IAM Authentication**: Uses EKS service accounts for AWS access
 
-1. Clone the repository and navigate to the directory:
-   ```bash
-   cd ec2-instance-controls
-   ```
+## Prerequisites
 
-2. Run the setup script to create a virtual environment and install dependencies:
-   ```bash
-   ./setup.sh
-   ```
+- Amazon EKS cluster
+- kubectl configured for your cluster
+- Docker installed locally
+- Access to container registry (Nexus, ECR, etc.)
 
-3. Copy environment file:
-   ```bash
-   cp env.example .env
-   ```
+## Quick Start
 
-4. Configure your environment variables in `.env`:
-   ```bash
-   # AWS Configuration
-   AWS_ACCESS_KEY_ID=your_aws_access_key_id
-   AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
-   AWS_REGION=us-west-2
-   
-   # Slack Configuration (if using Slack integration)
-   SLACK_BOT_TOKEN=xoxb-your-slack-bot-token
-   SLACK_SIGNING_SECRET=your_slack_signing_secret
-   ```
+### 1. Setup IAM Role
 
-5. Run the application:
-   ```bash
-   # Activate virtual environment
-   source venv/bin/activate
-   
-   # Run the app
-   python3 app.py
-   # or use the run script
-   ./run.sh
-   ```
+Create the necessary IAM resources for EKS service account authentication:
 
-### Docker Setup
-
-Alternatively, you can run with Docker:
 ```bash
-docker-compose up
+export EKS_CLUSTER_NAME="your-cluster-name"
+export AWS_REGION="us-west-2"
+./aws/setup-iam.sh
 ```
 
-## API Endpoints
+### 2. Configure Registry
 
-All endpoints accept POST requests with form data.
+Set your container registry details:
 
-### Health Check
-- **Endpoint**: `GET /health`
-- **Response**: `{"status": "ok"}`
-
-### Instance Management
-- **Endpoint**: `POST /instances`
-- **Parameters**: `user_id`, `user_name`
-- **Function**: Lists all instances in the AWS region with their current states
-
-### Authentication Check
-- **Endpoint**: `POST /admin/check`
-- **Parameters**: `user_id`, `user_name`
-- **Function**: Verifies if a user is authenticated and can access instances
-
-### EC2 Power Control
-- **Endpoints**: `POST /ec2/power` or `POST /ec2-power-state`
-- **Parameters**: `user_id`, `text`
-- **Text Format**: 
-  - `i-1234567890abcdef0` - Check instance status
-  - `i-1234567890abcdef0 on` - Start instance
-  - `i-1234567890abcdef0 off` - Stop instance
-  - `instance-name` - Use instance name instead of ID
-  - `instance-name on` - Start instance by name
-
-### EC2 Schedule Control
-- **Endpoint**: `POST /ec2-schedule`
-- **Parameters**: `user_id`, `text`
-- **Text Format**: 
-  - `i-1234567890abcdef0` - Check instance schedule
-  - `i-1234567890abcdef0 9am to 5pm` - Set schedule (start at 9 AM, stop at 5 PM)
-  - `i-1234567890abcdef0 5:30am to 17:30` - Set schedule with various time formats
-  - `i-1234567890abcdef0 clear` - Clear/remove schedule
-- **Time Formats Supported**:
-  - `5am`, `5:00am`, `5:00 am`, `5:00 Am` - All equivalent
-  - `5pm`, `5:30pm`, `17:00`, `17:30` - 12-hour and 24-hour formats
-  - Flexible parsing using python-dateutil library
-- **Clear Commands**: `clear`, `reset`, `unset`, `no`, `remove`, `delete` (all equivalent)
-
-**Usage:** `/ec2-schedule <instance> [<start> to <stop>]` or `/ec2-schedule <instance> clear`
-
-## Access Control
-
-The application uses a simplified access control system:
-
-- **Authentication Required**: Users must be logged into Slack and provide a `user_id`
-- **Universal Access**: Any authenticated user can manage all EC2 instances in the configured AWS region
-- **No User Restrictions**: No role-based permissions or instance assignments - all users have equal access
-
-## Testing
-
-Run the test suite:
 ```bash
-./test.sh
+export REGISTRY_URL="your-nexus-registry.com"
+export REGISTRY_USERNAME="your-username"
+export REGISTRY_PASSWORD="your-password"
+```
+
+### 3. Deploy Application
+
+Build and deploy to EKS:
+
+```bash
+./deploy.sh
 ```
 
 ## Configuration
 
-### AWS Configuration
-Edit `src/config.py` to:
-- Configure AWS region
-- Set default region for EC2 operations
+### Environment Variables
 
-### AWS Permissions
-The application requires the following AWS permissions:
-- `ec2:DescribeInstances`
-- `ec2:StartInstances`
-- `ec2:StopInstances`
+The application uses these environment variables (configured via ConfigMap):
+
+- `AWS_REGION`: AWS region for EC2 operations
+- `LOG_LEVEL`: Logging level (INFO, DEBUG, etc.)
+- `SCHEDULE_DIR`: Directory for storing schedules
+
+### Secrets
+
+Optional Slack integration (if needed):
+- `SLACK_BOT_TOKEN`: Slack bot token
+- `SLACK_SIGNING_SECRET`: Slack signing secret
+
+## API Endpoints
+
+- `POST /health` - Health check
+- `POST /instances` - List user's instances
+- `POST /admin/check` - Check admin status
+- `POST /ec2/power` - Control instance power state
+- `POST /ec2-schedule` - Manage instance schedules
+
+## Usage Examples
+
+### Check Instance Status
+```bash
+curl -X POST http://localhost:8000/ec2/power \
+  -d "user_id=U123456&user_name=john&text=i-1234567890abcdef0"
+```
+
+### Start Instance
+```bash
+curl -X POST http://localhost:8000/ec2/power \
+  -d "user_id=U123456&user_name=john&text=i-1234567890abcdef0 on"
+```
+
+### List Instances
+```bash
+curl -X POST http://localhost:8000/instances \
+  -d "user_id=U123456&user_name=john"
+```
 
 ## Development
 
-### Project Structure
-```
-ec2-instance-controls/
-├── app.py              # Main Flask application
-├── src/
-│   ├── auth.py         # User authentication (simplified)
-│   ├── aws_client.py   # AWS EC2 operations
-│   ├── config.py       # Configuration (AWS region only)
-│   ├── handlers.py     # Request handlers
-│   └── schedule.py     # Instance scheduling
-├── test/               # Test files
-├── requirements.txt    # Python dependencies
-└── setup.sh           # Setup script
+### Local Testing
+
+For local development, you can run the application directly:
+
+```bash
+pip install -r requirements.txt
+python app.py
 ```
 
-### Adding New Features
-1. Add new handlers in `src/handlers.py`
-2. Add corresponding routes in `app.py`
-3. Update tests in `test/test_handlers.py`
-4. Update this README
+### Building New Image
 
-## Todo
+To update the application:
 
-- Add group RBAC (if needed in the future)
-- Add default instance ID for some users
-- Use tags instead of hardcoded instance IDs
-- Allow users to use IP address and other identifiers
-- Set up SSL on the server
-- Limit server IPs
-- Add admin endpoints for managing permissions from slack
-- Integrate with teleport for groups implementation
-- Add logic to prevent spam with power state changes
-- Make it dynamically load data (use a database)
-- Use production WSGI server
-- Add logic to regularly check if EC2 instances still exist
+```bash
+export IMAGE_TAG="v1.1"
+./deploy.sh
+```
 
-## Possible Implementations for Groups
+## Monitoring
 
-- Teleport OAuth?
-- Slack channels? give private pod channels control over their instances
-- manually set up in a database
+### View Logs
+```bash
+kubectl logs -f deployment/ec2-instance-controls -n ec2-controls
+```
 
-## Possible Implementations for Scheduled Power State
+### Check Pod Status
+```bash
+kubectl get pods -n ec2-controls
+```
 
-- AWS EC2 instance scheduler
-- ~~Homemade CRON or something~~ (Implemented: Basic schedule storage and parsing)
+### Port Forward for Testing
+```bash
+kubectl port-forward service/ec2-instance-controls 8000:8000 -n ec2-controls
+```
+
+## Security
+
+- **IAM Roles**: Uses EKS service accounts for AWS authentication
+- **No Hardcoded Credentials**: All AWS access through IAM roles
+- **Audit Logging**: All operations logged with user context
+- **Role-Based Access**: Users can only access authorized instances
+
+## Troubleshooting
+
+### Common Issues
+
+1. **IAM Role Not Working**: Ensure OIDC provider is configured and service account has correct annotations
+2. **Image Pull Errors**: Check registry credentials and image path
+3. **Pod Startup Failures**: Check logs for configuration issues
+
+### Debug Commands
+
+```bash
+# Check service account
+kubectl describe serviceaccount ec2-controls-sa -n ec2-controls
+
+# Check pod events
+kubectl describe pod -l app=ec2-instance-controls -n ec2-controls
+
+# Check AWS credentials in pod
+kubectl exec -it deployment/ec2-instance-controls -n ec2-controls -- env | grep AWS
+```
+
+## License
+
+[Add your license here]

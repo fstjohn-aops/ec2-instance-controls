@@ -1,8 +1,3 @@
-# Virtual environment
-venv/
-env/
-ENV/
-
 # Python
 __pycache__/
 *.py[cod]
@@ -24,6 +19,61 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Kubernetes
+*.bak
+kubeconfig
+
+# Docker
+.dockerignore
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Temporary files
+*.tmp
+*.temp
 
 # Database
 *.db
@@ -32,21 +82,3 @@ wheels/
 
 # Schedule data
 schedules.json
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-
-# Environment variables
-.env 
-
-.pytest_cache/
