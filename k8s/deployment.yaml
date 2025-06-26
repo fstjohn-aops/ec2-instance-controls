@@ -13,42 +13,50 @@ spec:
     metadata:
       labels:
         app: ec2-instance-controls
+      annotations:
+        # EKS-specific annotations for IAM roles
+        eks.amazonaws.com/role-arn: arn:aws:iam::${AWS_ACCOUNT_ID}:role/ec2-controls-role
     spec:
+      serviceAccountName: ec2-controls-sa
       containers:
       - name: ec2-control-app
-        image: ec2-instance-controls:latest
+        image: ec2-instance-controls:latest  # Will be replaced by deployment script
         ports:
         - containerPort: 8000
         env:
         - name: PORT
           value: "8000"
         - name: AWS_REGION
-          value: "us-west-2"
-        - name: AWS_ACCESS_KEY_ID
           valueFrom:
-            secretKeyRef:
-              name: aws-credentials
-              key: aws-access-key-id
-        - name: AWS_SECRET_ACCESS_KEY
+            configMapKeyRef:
+              name: ec2-controls-config
+              key: AWS_REGION
+        - name: LOG_LEVEL
           valueFrom:
-            secretKeyRef:
-              name: aws-credentials
-              key: aws-secret-access-key
+            configMapKeyRef:
+              name: ec2-controls-config
+              key: LOG_LEVEL
+        - name: SCHEDULE_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: ec2-controls-config
+              key: SCHEDULE_DIR
+        # Slack credentials (optional - only if needed)
         - name: SLACK_BOT_TOKEN
           valueFrom:
             secretKeyRef:
               name: slack-credentials
               key: slack-bot-token
+              optional: true
         - name: SLACK_SIGNING_SECRET
           valueFrom:
             secretKeyRef:
               name: slack-credentials
               key: slack-signing-secret
+              optional: true
         volumeMounts:
         - name: schedule-storage
           mountPath: /app/schedules
-        - name: logs-storage
-          mountPath: /app/logs
         resources:
           requests:
             memory: "128Mi"
@@ -62,15 +70,26 @@ spec:
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
       volumes:
       - name: schedule-storage
         persistentVolumeClaim:
           claimName: schedule-pvc
-      - name: logs-storage
-        emptyDir: {} 
+      securityContext:
+        fsGroup: 1000 
