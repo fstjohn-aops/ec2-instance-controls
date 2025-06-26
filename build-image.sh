@@ -17,4 +17,4 @@ podman tag ec2-instance-controls:latest ec2-instance-controls:$TAG
 
 # Show built images
 echo "Built images:"
-podman images ec2-instance-controls 
+podman images ec2-instance-controls
