@@ -28,7 +28,7 @@ def handle_ec2_power(request):
         instance_id = parts[0]
         
         if not can_control_instance(user_id, instance_id):
-            return f"Instance `{instance_id}` is not assigned to you or doesn't exist."
+            return f"access to instance `{instance_id}` denied"
         
         # Get current state
         current_state = get_instance_state(instance_id)
@@ -42,7 +42,7 @@ def handle_ec2_power(request):
         instance_id, power_state = parts
         
         if not can_control_instance(user_id, instance_id):
-            return f"Instance `{instance_id}` is not assigned to you or doesn't exist."
+            return f"access to instance `{instance_id}` denied"
         
         if power_state not in ['on', 'off']:
             return "Power state must be 'on' or 'off'."
@@ -56,7 +56,7 @@ def handle_ec2_power(request):
         # Then do the AWS operation
         current_state = get_instance_state(instance_id)
         if current_state:
-            logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
+            logger.info(f"AWS: Instance `{instance_id}` current state is {current_state}")
             
             # Change the state
             if power_state == 'on':
@@ -64,7 +64,7 @@ def handle_ec2_power(request):
             else:
                 stop_instance(instance_id)
         else:
-            logger.error(f"AWS: Instance {instance_id} not found")
+            logger.error(f"AWS: Instance `{instance_id}` not found")
         
         return response
     
