@@ -49,19 +49,6 @@ spec:
                 configMapKeyRef:
                   name: ec2-slack-bot-config
                   key: SCHEDULE_DIR
-            # Slack credentials (optional - only if needed)
-            - name: SLACK_BOT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: slack-credentials
-                  key: slack-bot-token
-                  optional: true
-            - name: SLACK_SIGNING_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: slack-credentials
-                  key: slack-signing-secret
-                  optional: true
           volumeMounts:
             - name: schedule-storage
               mountPath: /app/schedules

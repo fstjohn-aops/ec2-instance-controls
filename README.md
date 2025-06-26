@@ -25,7 +25,6 @@ A Kubernetes-native Slack bot for managing EC2 instances through Slack commands.
 - kubectl configured for your cluster
 - Docker installed locally
 - Access to container registry (Nexus, ECR, etc.)
-- Slack app configured with Events API
 
 ## Quick Start
 
@@ -39,16 +38,7 @@ export AWS_REGION="us-west-2"
 ./aws/setup-iam.sh
 ```
 
-### 2. Configure Slack App
-
-Set up your Slack app credentials in the Kubernetes secrets:
-
-```bash
-# Update k8s/05-secrets.yml with your Slack credentials
-kubectl apply -f k8s/05-secrets.yml
-```
-
-### 3. Deploy Application
+### 2. Deploy Application
 
 Deploy to EKS using the new Kubernetes configuration:
 
@@ -59,7 +49,6 @@ kubectl apply -f k8s/
 # Or deploy individual components
 kubectl apply -f k8s/00-namespace.yml
 kubectl apply -f k8s/04-configmap.yml
-kubectl apply -f k8s/05-secrets.yml
 kubectl apply -f k8s/01-deployment.yml
 kubectl apply -f k8s/02-service.yml
 kubectl apply -f k8s/03-ingress.yml
@@ -75,12 +64,6 @@ The application uses these environment variables (configured via ConfigMap):
 - `LOG_LEVEL`: Logging level (INFO, DEBUG, etc.)
 - `SCHEDULE_DIR`: Directory for storing schedules
 - `PORT`: Application port (default: 8000)
-
-### Secrets
-
-Slack integration credentials:
-- `SLACK_BOT_TOKEN`: Slack bot token
-- `SLACK_SIGNING_SECRET`: Slack signing secret
 
 ## API Endpoints
 
@@ -163,7 +146,6 @@ The deployment creates several Kubernetes resources:
 - **Service**: `ec2-slack-bot` - Internal service for the deployment
 - **Ingress**: `ec2-slack-bot` - External access with TLS and IP whitelist
 - **ConfigMap**: `ec2-slack-bot-config` - Application configuration
-- **Secrets**: `slack-credentials` - Slack API credentials
 
 ## Security
 
@@ -181,7 +163,6 @@ The deployment creates several Kubernetes resources:
 1. **IAM Role Not Working**: Ensure OIDC provider is configured and service account has correct annotations
 2. **Image Pull Errors**: Check registry credentials and image path
 3. **Pod Startup Failures**: Check logs for configuration issues
-4. **Slack Integration Issues**: Verify Slack credentials and Events API configuration
 
 ### Debug Commands
 
@@ -194,9 +175,6 @@ kubectl describe pod -l app=ec2-slack-bot -n ec2-slack-bot
 
 # Check AWS credentials in pod
 kubectl exec -it deployment/ec2-slack-bot -n ec2-slack-bot -- env | grep AWS
-
-# Check Slack configuration
-kubectl get secret slack-credentials -n ec2-slack-bot -o yaml
 
 # Check ingress status
 kubectl describe ingress ec2-slack-bot -n ec2-slack-bot

@@ -14,4 +14,3 @@ This is a Slack bot for controlling EC2 instances. Several k8s resources are cre
 - `02-service`: Create a Service for the Slack bot Deployment.
 - `03-ingress`: Use Ingress to allow external network traffic to reach the Slack bot Service.
 - `04-configmap`: Configuration data for the Slack bot application.
-- `05-secrets`: Sensitive data like Slack API keys and tokens.
