@@ -12,20 +12,8 @@ aws_region = os.environ.get('AWS_REGION', 'us-east-1')
 
 # Initialize AWS EC2 client
 try:
-    # Try to get credentials from environment variables first
-    aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
-    aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    
-    if aws_access_key_id and aws_secret_access_key:
-        ec2_client = boto3.client('ec2', 
-                                 region_name=aws_region,
-                                 aws_access_key_id=aws_access_key_id,
-                                 aws_secret_access_key=aws_secret_access_key)
-        logger.info("AWS credentials found in environment variables")
-    else:
-        # Fallback to default credential chain (instance role, etc.)
-        ec2_client = boto3.client('ec2', region_name=aws_region)
-        logger.warning("AWS credentials not found in environment variables, using default credential chain")
+    ec2_client = boto3.client('ec2')
+    logger.info("AWS credentials found in environment variables")
 except Exception as e:
     logger.error(f"Failed to initialize AWS client: {e}")
     raise
