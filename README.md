@@ -92,12 +92,15 @@ All endpoints accept POST requests with form data.
   - `i-1234567890abcdef0` - Check instance schedule
   - `i-1234567890abcdef0 9am to 5pm` - Set schedule (start at 9 AM, stop at 5 PM)
   - `i-1234567890abcdef0 5:30am to 17:30` - Set schedule with various time formats
+  - `i-1234567890abcdef0 clear` - Clear/remove schedule
 - **Time Formats Supported**:
   - `5am`, `5:00am`, `5:00 am`, `5:00 Am` - All equivalent
   - `5pm`, `5:30pm`, `17:00`, `17:30` - 12-hour and 24-hour formats
   - Flexible parsing using python-dateutil library
+- **Clear Commands**: `clear`, `reset`, `unset`, `no`, `remove`, `delete` (all equivalent)
+- **AWS Integration**: Uses AWS Instance Scheduler tags on EC2 instances
 
-**Usage:** `/ec2-schedule <instance> [<start> to <stop>]`
+**Usage:** `/ec2-schedule <instance> [<start> to <stop>]` or `/ec2-schedule <instance> clear`
 
 ## User Permissions
 

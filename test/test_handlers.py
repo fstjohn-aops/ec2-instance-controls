@@ -188,6 +188,73 @@ def test_ec2_schedule_to_at_end():
     result = handle_ec2_schedule(request)
     assert "Usage:" in result
 
+def test_ec2_schedule_clear():
+    """Test clearing a schedule"""
+    with app.app_context():
+        with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_delete_schedule.return_value = True
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule cleared for" in result.json['text']
+
+def test_ec2_schedule_reset():
+    """Test resetting a schedule"""
+    with app.app_context():
+        with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_delete_schedule.return_value = True
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d reset'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule cleared for" in result.json['text']
+
+def test_ec2_schedule_unset():
+    """Test unsetting a schedule"""
+    with app.app_context():
+        with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_delete_schedule.return_value = True
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d unset'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule cleared for" in result.json['text']
+
+def test_ec2_schedule_clear_failed():
+    """Test clearing a schedule when it fails"""
+    with app.app_context():
+        with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_delete_schedule.return_value = False
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Failed to clear schedule" in result
+
+def test_ec2_schedule_invalid_command():
+    """Test schedule with invalid command"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d invalid'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Usage:" in result
+
 # Time parsing tests
 def test_parse_time_5am():
     """Test parsing '5am'"""
