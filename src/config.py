@@ -1,5 +1,5 @@
 # Admin user IDs
-ADMIN_USERS = {"U08QYU6AX0V"}
+ADMIN_USERS = {"U08QYU6AX0V", "U07U3H01WQ5"}
 
 # User to EC2 instances mapping
 USER_INSTANCES = {
