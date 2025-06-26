@@ -88,7 +88,6 @@ The application uses these environment variables (configured via ConfigMap):
 
 - `AWS_REGION`: AWS region for EC2 operations
 - `LOG_LEVEL`: Logging level (INFO, DEBUG, etc.)
-- `SCHEDULE_DIR`: Directory for storing schedules
 - `PORT`: Application port (default: 8000)
 
 ## API Endpoints

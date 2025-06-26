@@ -6,17 +6,6 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Kubernetes-aware storage path
-SCHEDULE_DIR = os.environ.get('SCHEDULE_DIR', '/app/schedules')
-SCHEDULE_FILE = os.path.join(SCHEDULE_DIR, 'schedules.json')
-
-# Ensure directory exists (only if not in test environment)
-if not os.environ.get('TESTING'):
-    try:
-        os.makedirs(SCHEDULE_DIR, exist_ok=True)
-    except OSError:
-        logger.warning(f"Could not create schedule directory {SCHEDULE_DIR}")
-
 def _log_schedule_operation(operation, instance_id, details=None, success=True, error=None):
     """Log schedule operations for auditing purposes"""
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -34,38 +23,6 @@ def _log_schedule_operation(operation, instance_id, details=None, success=True, 
         log_entry['error'] = str(error)
     
     logger.info(f"SCHEDULE_AUDIT: {json.dumps(log_entry)}")
-
-def _load_schedules():
-    """Load schedules from file"""
-    if os.path.exists(SCHEDULE_FILE):
-        try:
-            with open(SCHEDULE_FILE, 'r') as f:
-                schedules = json.load(f)
-                logger.info(f"Loaded {len(schedules)} schedules from {SCHEDULE_FILE}")
-                return schedules
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error(f"Error loading schedules: {e}")
-            _log_schedule_operation("load_schedules", "file", {"error": str(e)}, False)
-            return {}
-    else:
-        logger.info(f"Schedule file {SCHEDULE_FILE} does not exist, starting with empty schedules")
-    return {}
-
-def _save_schedules(schedules):
-    """Save schedules to file"""
-    try:
-        # Ensure directory exists
-        os.makedirs(SCHEDULE_DIR, exist_ok=True)
-        
-        with open(SCHEDULE_FILE, 'w') as f:
-            json.dump(schedules, f, indent=2)
-        logger.info(f"Saved {len(schedules)} schedules to {SCHEDULE_FILE}")
-        _log_schedule_operation("save_schedules", "file", {"schedule_count": len(schedules)})
-        return True
-    except IOError as e:
-        logger.error(f"Error saving schedules: {e}")
-        _log_schedule_operation("save_schedules", "file", {"error": str(e)}, False)
-        return False
 
 def parse_time(time_str):
     """Parse time string to time object, supporting various formats"""
@@ -90,75 +47,31 @@ def parse_time(time_str):
         return None
 
 def get_schedule(instance_id):
-    """Get schedule for an instance"""
-    schedules = _load_schedules()
-    schedule = schedules.get(instance_id)
-    
+    """Get schedule for an instance - no-op until EC2 tag implementation"""
+    logger.info(f"Schedule functionality temporarily disabled - will be implemented with EC2 tags for {instance_id}")
     _log_schedule_operation("get_schedule", instance_id, {
-        "schedule_found": schedule is not None,
-        "schedule": schedule
+        "schedule_found": False,
+        "note": "schedule_functionality_disabled_ec2_tags_coming"
     })
-    
-    return schedule
+    return None
 
 def set_schedule(instance_id, start_time, stop_time):
-    """Set schedule for an instance"""
-    schedules = _load_schedules()
-    
-    # Convert time objects to string format for JSON serialization
-    schedule = {
-        'start_time': start_time.strftime('%H:%M'),
-        'stop_time': stop_time.strftime('%H:%M')
-    }
-    
-    # Check if schedule already exists
-    existing_schedule = schedules.get(instance_id)
-    
-    schedules[instance_id] = schedule
-    
-    if _save_schedules(schedules):
-        logger.info(f"Schedule set for {instance_id}: {start_time.strftime('%H:%M')} to {stop_time.strftime('%H:%M')}")
-        _log_schedule_operation("set_schedule", instance_id, {
-            "start_time": start_time.strftime('%H:%M'),
-            "stop_time": stop_time.strftime('%H:%M'),
-            "previous_schedule": existing_schedule
-        })
-        return True
-    else:
-        logger.error(f"Failed to save schedule for {instance_id}")
-        _log_schedule_operation("set_schedule", instance_id, {
-            "start_time": start_time.strftime('%H:%M'),
-            "stop_time": stop_time.strftime('%H:%M'),
-            "error": "save_failed"
-        }, False)
-        return False
+    """Set schedule for an instance - no-op until EC2 tag implementation"""
+    logger.info(f"Schedule functionality temporarily disabled - will be implemented with EC2 tags for {instance_id}")
+    _log_schedule_operation("set_schedule", instance_id, {
+        "start_time": start_time.strftime('%H:%M'),
+        "stop_time": stop_time.strftime('%H:%M'),
+        "note": "schedule_functionality_disabled_ec2_tags_coming"
+    })
+    return False
 
 def delete_schedule(instance_id):
-    """Delete schedule for an instance"""
-    schedules = _load_schedules()
-    
-    if instance_id in schedules:
-        deleted_schedule = schedules[instance_id]
-        del schedules[instance_id]
-        
-        if _save_schedules(schedules):
-            logger.info(f"Schedule deleted for {instance_id}")
-            _log_schedule_operation("delete_schedule", instance_id, {
-                "deleted_schedule": deleted_schedule
-            })
-            return True
-        else:
-            logger.error(f"Failed to delete schedule for {instance_id}")
-            _log_schedule_operation("delete_schedule", instance_id, {
-                "error": "save_failed"
-            }, False)
-            return False
-    else:
-        logger.info(f"No schedule found to delete for {instance_id}")
-        _log_schedule_operation("delete_schedule", instance_id, {
-            "error": "schedule_not_found"
-        }, False)
-        return False
+    """Delete schedule for an instance - no-op until EC2 tag implementation"""
+    logger.info(f"Schedule functionality temporarily disabled - will be implemented with EC2 tags for {instance_id}")
+    _log_schedule_operation("delete_schedule", instance_id, {
+        "note": "schedule_functionality_disabled_ec2_tags_coming"
+    })
+    return False
 
 def format_schedule_display(schedule):
     """Format schedule for display"""

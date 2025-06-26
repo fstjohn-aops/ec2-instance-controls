@@ -40,11 +40,6 @@ spec:
                 configMapKeyRef:
                   name: ec2-slack-bot-config
                   key: LOG_LEVEL
-            - name: SCHEDULE_DIR
-              valueFrom:
-                configMapKeyRef:
-                  name: ec2-slack-bot-config
-                  key: SCHEDULE_DIR
           resources:
             requests:
               cpu: "100m"

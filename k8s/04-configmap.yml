@@ -8,12 +8,9 @@ data:
   LOG_LEVEL: "INFO"
   LOG_FORMAT: "json"
   
-  # Schedule storage configuration
-  SCHEDULE_DIR: "/app/schedules"
-  
   # AWS configuration
   AWS_REGION: "us-west-2"
   
   # Application configuration
   PORT: "8000"
-  TEST_MODE: "false" 
+  TEST_MODE: "false"
