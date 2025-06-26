@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from flask import Flask
 from src.handlers import handle_admin_check, handle_ec2_power
 

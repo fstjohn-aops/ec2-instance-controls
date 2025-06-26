@@ -5,12 +5,7 @@ Simple Flask App
 
 from flask import Flask, request
 import logging
-import os
-from dotenv import load_dotenv
 from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances
-
-# Load environment variables from .env file
-load_dotenv()
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
