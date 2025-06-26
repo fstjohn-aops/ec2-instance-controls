@@ -40,6 +40,7 @@ def handle_ec2_power(request):
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
+        logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
             return f"Instance `{instance_identifier}` not found"
         
@@ -64,6 +65,7 @@ def handle_ec2_power(request):
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
+        logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
             return f"Instance `{instance_identifier}` not found"
         

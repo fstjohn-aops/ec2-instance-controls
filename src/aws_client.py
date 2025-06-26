@@ -129,6 +129,7 @@ def resolve_instance_identifier(identifier):
     # Otherwise, treat it as a Name tag
     logger.info(f"Treating '{identifier}' as instance name, looking up by Name tag")
     instance = get_instance_by_name(identifier)
+    logger.info(f"get_instance_by_name('{identifier}') returned: {instance}")
     if instance:
         instance_id = instance['InstanceId']
         logger.info(f"Found instance '{identifier}' with ID: {instance_id}")
