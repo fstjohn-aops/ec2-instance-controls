@@ -85,6 +85,20 @@ All endpoints accept POST requests with form data.
   - `i-1234567890abcdef0 on` - Start instance
   - `i-1234567890abcdef0 off` - Stop instance
 
+### EC2 Schedule Control
+- **Endpoint**: `POST /ec2-schedule`
+- **Parameters**: `user_id`, `text`
+- **Text Format**: 
+  - `i-1234567890abcdef0` - Check instance schedule
+  - `i-1234567890abcdef0 9am to 5pm` - Set schedule (start at 9 AM, stop at 5 PM)
+  - `i-1234567890abcdef0 5:30am to 17:30` - Set schedule with various time formats
+- **Time Formats Supported**:
+  - `5am`, `5:00am`, `5:00 am`, `5:00 Am` - All equivalent
+  - `5pm`, `5:30pm`, `17:00`, `17:30` - 12-hour and 24-hour formats
+  - Flexible parsing using python-dateutil library
+
+**Usage:** `/ec2-schedule <instance> [<start> to <stop>]`
+
 ## User Permissions
 
 The application uses a role-based access control system:
@@ -150,3 +164,14 @@ ec2-instance-controls/
 - Make it dynamically load data (use a database)
 - Use production WSGI server
 - Add logic to regularly check if EC2 instances still exist
+
+## Possible Implementations for Groups
+
+- Teleport OAuth?
+- Slack channels? give private pod channels control over their instances
+- manually set up in a database
+
+## Possible Implementations for Scheduled Power State
+
+- AWS EC2 instance scheduler
+- ~~Homemade CRON or something~~ (Implemented: Basic schedule storage and parsing)

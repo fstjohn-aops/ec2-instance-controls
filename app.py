@@ -5,7 +5,7 @@ Simple Flask App
 
 from flask import Flask, request
 import logging
-from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances
+from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances, handle_ec2_schedule
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +29,10 @@ def set_ec2_power():
 @app.route('/ec2-power-state', methods=['POST'])
 def ec2_power_state():
     return handle_ec2_power(request)
+
+@app.route('/ec2-schedule', methods=['POST'])
+def ec2_schedule():
+    return handle_ec2_schedule(request)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)

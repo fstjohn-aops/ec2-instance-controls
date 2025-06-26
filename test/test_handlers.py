@@ -1,7 +1,8 @@
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from flask import Flask
-from src.handlers import handle_admin_check, handle_ec2_power
+from src.handlers import handle_admin_check, handle_ec2_power, handle_ec2_schedule
+from src.schedule import parse_time, format_schedule_display
 
 # Create a test Flask app
 app = Flask(__name__)
@@ -53,4 +54,196 @@ def test_ec2_power_usage_message():
     request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on extra'}
     
     result = handle_ec2_power(request)
-    assert "Usage:" in result 
+    assert "Usage:" in result
+
+# Schedule tests
+def test_ec2_schedule_get_no_schedule():
+    """Test getting schedule when none exists"""
+    with app.app_context():
+        with patch('src.handlers.get_schedule') as mock_get_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_get_schedule.return_value = None
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_schedule(request)
+            assert "No schedule set" in result
+
+def test_ec2_schedule_get_with_schedule():
+    """Test getting schedule when one exists"""
+    with app.app_context():
+        with patch('src.handlers.get_schedule') as mock_get_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_get_schedule.return_value = {'start_time': '09:00', 'stop_time': '17:00'}
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_schedule(request)
+            assert "9:00 AM to 5:00 PM" in result
+
+def test_ec2_schedule_set_valid():
+    """Test setting a valid schedule"""
+    with app.app_context():
+        with patch('src.handlers.set_schedule') as mock_set_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_set_schedule.return_value = True
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule set for" in result.json['text']
+            assert "9:00 AM to 5:00 PM" in result.json['text']
+
+def test_ec2_schedule_set_invalid_start_time():
+    """Test setting schedule with invalid start time"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d invalid to 5pm'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Invalid start time" in result
+
+def test_ec2_schedule_set_invalid_stop_time():
+    """Test setting schedule with invalid stop time"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to invalid'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Invalid stop time" in result
+
+def test_ec2_schedule_set_failed():
+    """Test setting schedule when it fails"""
+    with app.app_context():
+        with patch('src.handlers.set_schedule') as mock_set_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            mock_set_schedule.return_value = False
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Failed to set schedule" in result
+
+def test_ec2_schedule_access_denied():
+    """Test schedule access denied for unauthorized user"""
+    request = Mock()
+    request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+    
+    result = handle_ec2_schedule(request)
+    assert "Access to instance" in result
+    assert "denied" in result
+
+def test_ec2_schedule_instance_not_found():
+    """Test schedule with non-existent instance"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+        mock_resolve.return_value = None
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-nonexistent 9am to 5pm'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Instance `i-nonexistent` not found" in result
+
+def test_ec2_schedule_usage_message():
+    """Test schedule with invalid format"""
+    request = Mock()
+    request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+    
+    result = handle_ec2_schedule(request)
+    assert "Usage:" in result
+
+def test_ec2_schedule_missing_to():
+    """Test schedule without 'to' keyword"""
+    request = Mock()
+    request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am 5pm'}
+    
+    result = handle_ec2_schedule(request)
+    assert "Usage:" in result
+
+def test_ec2_schedule_to_at_beginning():
+    """Test schedule with 'to' at beginning"""
+    request = Mock()
+    request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d to 5pm'}
+    
+    result = handle_ec2_schedule(request)
+    assert "Usage:" in result
+
+def test_ec2_schedule_to_at_end():
+    """Test schedule with 'to' at end"""
+    request = Mock()
+    request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to'}
+    
+    result = handle_ec2_schedule(request)
+    assert "Usage:" in result
+
+# Time parsing tests
+def test_parse_time_5am():
+    """Test parsing '5am'"""
+    result = parse_time('5am')
+    assert result.hour == 5
+    assert result.minute == 0
+
+def test_parse_time_5_00am():
+    """Test parsing '5:00am'"""
+    result = parse_time('5:00am')
+    assert result.hour == 5
+    assert result.minute == 0
+
+def test_parse_time_5_00_am():
+    """Test parsing '5:00 am'"""
+    result = parse_time('5:00 am')
+    assert result.hour == 5
+    assert result.minute == 0
+
+def test_parse_time_5_00_Am():
+    """Test parsing '5:00 Am'"""
+    result = parse_time('5:00 Am')
+    assert result.hour == 5
+    assert result.minute == 0
+
+def test_parse_time_17_00():
+    """Test parsing '17:00' (24-hour format)"""
+    result = parse_time('17:00')
+    assert result.hour == 17
+    assert result.minute == 0
+
+def test_parse_time_5_30pm():
+    """Test parsing '5:30pm'"""
+    result = parse_time('5:30pm')
+    assert result.hour == 17
+    assert result.minute == 30
+
+def test_parse_time_invalid():
+    """Test parsing invalid time"""
+    result = parse_time('invalid')
+    assert result is None
+
+# Schedule display tests
+def test_format_schedule_display_no_schedule():
+    """Test formatting display when no schedule exists"""
+    result = format_schedule_display(None)
+    assert result == "No schedule set"
+
+def test_format_schedule_display_with_schedule():
+    """Test formatting display with valid schedule"""
+    schedule = {'start_time': '09:00', 'stop_time': '17:00'}
+    result = format_schedule_display(schedule)
+    assert result == "9:00 AM to 5:00 PM"
+
+def test_format_schedule_display_midnight():
+    """Test formatting display with midnight times"""
+    schedule = {'start_time': '00:00', 'stop_time': '23:59'}
+    result = format_schedule_display(schedule)
+    assert result == "12:00 AM to 11:59 PM" 
