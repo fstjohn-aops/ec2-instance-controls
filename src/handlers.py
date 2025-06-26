@@ -69,4 +69,4 @@ def handle_ec2_power(request):
         return response
     
     else:
-        return "Usage: <instance-id> [on|off]" 
+        return "Usage: <instance-id> [on|off]"

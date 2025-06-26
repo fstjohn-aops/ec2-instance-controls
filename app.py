@@ -22,5 +22,9 @@ def admin_check():
 def set_ec2_power():
     return handle_ec2_power(request)
 
+@app.route('/ec2-power-state', methods=['POST'])
+def ec2_power_state():
+    return handle_ec2_power(request)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=True)
