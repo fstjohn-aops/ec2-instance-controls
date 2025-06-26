@@ -8,6 +8,7 @@ import logging
 import json
 from datetime import datetime
 from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances, handle_ec2_schedule
+import os
 
 app = Flask(__name__)
 
@@ -56,7 +57,10 @@ def _log_request():
         'user_id': user_id,
         'user_name': user_name,
         'remote_addr': request.remote_addr,
-        'user_agent': request.headers.get('User-Agent', 'unknown')
+        'user_agent': request.headers.get('User-Agent', 'unknown'),
+        'pod_name': os.environ.get('HOSTNAME', 'unknown'),
+        'namespace': os.environ.get('POD_NAMESPACE', 'unknown'),
+        'deployment': os.environ.get('DEPLOYMENT_NAME', 'unknown')
     }
     
     # Log form data for POST requests (excluding sensitive data)

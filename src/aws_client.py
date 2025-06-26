@@ -36,7 +36,9 @@ def _log_aws_operation(operation, target, details=None, success=True, error=None
         'target': target,
         'region': aws_region,
         'details': details,
-        'status': status
+        'status': status,
+        'pod_name': os.environ.get('HOSTNAME', 'unknown'),
+        'namespace': os.environ.get('POD_NAMESPACE', 'unknown')
     }
     if error:
         log_entry['error'] = str(error)

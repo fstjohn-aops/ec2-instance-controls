@@ -6,6 +6,7 @@ from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
 from src.auth import is_admin, get_user_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,10 @@ def _log_user_action(user_id, user_name, action, target, details=None, success=T
         'action': action,
         'target': target,
         'details': details,
-        'status': status
+        'status': status,
+        'pod_name': os.environ.get('HOSTNAME', 'unknown'),
+        'namespace': os.environ.get('POD_NAMESPACE', 'unknown'),
+        'deployment': os.environ.get('DEPLOYMENT_NAME', 'unknown')
     }
     logger.info(f"AUDIT: {json.dumps(log_entry)}")
 

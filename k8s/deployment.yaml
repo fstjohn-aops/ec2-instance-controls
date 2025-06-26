@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ec2-instance-controls
+  labels:
+    app: ec2-instance-controls
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ec2-instance-controls
+  template:
+    metadata:
+      labels:
+        app: ec2-instance-controls
+    spec:
+      containers:
+      - name: ec2-control-app
+        image: ec2-instance-controls:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: PORT
+          value: "8000"
+        - name: AWS_REGION
+          value: "us-west-2"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-secret-access-key
+        - name: SLACK_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: slack-credentials
+              key: slack-bot-token
+        - name: SLACK_SIGNING_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: slack-credentials
+              key: slack-signing-secret
+        volumeMounts:
+        - name: schedule-storage
+          mountPath: /app/schedules
+        - name: logs-storage
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: schedule-storage
+        persistentVolumeClaim:
+          claimName: schedule-pvc
+      - name: logs-storage
+        emptyDir: {} 

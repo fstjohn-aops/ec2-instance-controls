@@ -6,8 +6,12 @@ import os
 
 logger = logging.getLogger(__name__)
 
-# Simple file-based storage for schedules
-SCHEDULE_FILE = 'schedules.json'
+# Kubernetes-aware storage path
+SCHEDULE_DIR = os.environ.get('SCHEDULE_DIR', '/app/schedules')
+SCHEDULE_FILE = os.path.join(SCHEDULE_DIR, 'schedules.json')
+
+# Ensure directory exists
+os.makedirs(SCHEDULE_DIR, exist_ok=True)
 
 def _log_schedule_operation(operation, instance_id, details=None, success=True):
     """Log schedule operations for auditing purposes"""
@@ -18,7 +22,9 @@ def _log_schedule_operation(operation, instance_id, details=None, success=True):
         'schedule_operation': operation,
         'instance_id': instance_id,
         'details': details,
-        'status': status
+        'status': status,
+        'pod_name': os.environ.get('HOSTNAME', 'unknown'),
+        'namespace': os.environ.get('POD_NAMESPACE', 'unknown')
     }
     logger.info(f"SCHEDULE_AUDIT: {json.dumps(log_entry)}")
 
@@ -34,11 +40,16 @@ def _load_schedules():
             logger.error(f"Error loading schedules: {e}")
             _log_schedule_operation("load_schedules", "file", {"error": str(e)}, False)
             return {}
+    else:
+        logger.info(f"Schedule file {SCHEDULE_FILE} does not exist, starting with empty schedules")
     return {}
 
 def _save_schedules(schedules):
     """Save schedules to file"""
     try:
+        # Ensure directory exists
+        os.makedirs(SCHEDULE_DIR, exist_ok=True)
+        
         with open(SCHEDULE_FILE, 'w') as f:
             json.dump(schedules, f, indent=2)
         logger.info(f"Saved {len(schedules)} schedules to {SCHEDULE_FILE}")
