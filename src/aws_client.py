@@ -84,7 +84,7 @@ def get_instance_by_name(instance_name):
         if len(instances) == 1:
             instance_id = instances[0]['InstanceId']
             logger.info(f"Returning single instance: {instance_id}")
-            return instances[0]
+            return instance_id
         elif len(instances) > 1:
             instance_ids = [i['InstanceId'] for i in instances]
             logger.warning(f"Multiple instances found with name '{instance_name}': {instance_ids}")
@@ -128,10 +128,9 @@ def resolve_instance_identifier(identifier):
     
     # Otherwise, treat it as a Name tag
     logger.info(f"Treating '{identifier}' as instance name, looking up by Name tag")
-    instance = get_instance_by_name(identifier)
-    logger.info(f"get_instance_by_name('{identifier}') returned: {instance}")
-    if instance:
-        instance_id = instance['InstanceId']
+    instance_id = get_instance_by_name(identifier)
+    logger.info(f"get_instance_by_name('{identifier}') returned: {instance_id}")
+    if instance_id:
         logger.info(f"Found instance '{identifier}' with ID: {instance_id}")
         return instance_id
     else:

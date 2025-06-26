@@ -4,7 +4,6 @@ ADMIN_USERS = {"U08QYU6AX0V", "U07U3H01WQ5", "U075XS8BD6K"}
 # User to EC2 instances mapping
 USER_INSTANCES = {
     "U08QYU6AX0V": ["i-0df9c53001c5c837d"],
-    "U07U3H01WQ5": ["i-0fff0f1804788ae88"],
     "U07GM0BSGRL": ["i-0c6536f5a9c24b020"],
     "U5ZNCLTN3": ["i-02262f266f9291ac7"],
     "UHBTJ9HRQ": ["i-0d91b5f7b05934a5a"],
