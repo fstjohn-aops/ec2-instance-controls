@@ -77,9 +77,9 @@ def set_ec2_power():
     # Then do the AWS operation
     try:
         # First get current state
-        response = ec2_client.describe_instances(InstanceIds=[instance_id])
-        if response['Reservations']:
-            instance = response['Reservations'][0]['Instances'][0]
+        aws_response = ec2_client.describe_instances(InstanceIds=[instance_id])
+        if aws_response['Reservations']:
+            instance = aws_response['Reservations'][0]['Instances'][0]
             current_state = instance['State']['Name']
             app.logger.info(f"AWS: Instance {instance_id} current state is {current_state}")
             

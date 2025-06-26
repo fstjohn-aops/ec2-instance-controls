@@ -50,3 +50,5 @@ Point your Slack app to `http://your-server:8000/api/slack/test` and check the l
    reduced or consolidated into an ec2 instance -> list of users map
 - Get this running on K8s
 - Allow users to wrap stuff in quotes as well
+- add logic to make sure users can't just spam it with power state changes
+   - like what happens if it's in "stopping"
