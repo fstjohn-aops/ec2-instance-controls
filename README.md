@@ -53,3 +53,4 @@ Point your Slack app to `http://your-server:8000/api/slack/test` and check the l
 - add logic to make sure users can't just spam it with power state changes
    - like what happens if it's in "stopping"
 - make it so it dynamically loads the data (just use a database?)
+- make sure the server is running a "production WSGI server" instead

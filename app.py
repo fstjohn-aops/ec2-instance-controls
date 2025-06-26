@@ -5,7 +5,7 @@ Simple Flask App
 
 from flask import Flask, request
 import logging
-from src.handlers import handle_admin_check, handle_ec2_power
+from src.handlers import handle_admin_check, handle_ec2_power, handle_help
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -13,6 +13,10 @@ logging.basicConfig(level=logging.INFO)
 @app.route('/health')
 def health():
     return {'status': 'ok'}
+
+@app.route('/help', methods=['GET', 'POST'])
+def help():
+    return handle_help(request)
 
 @app.route('/admin/check', methods=['POST'])
 def admin_check():

@@ -28,7 +28,7 @@ def handle_ec2_power(request):
         instance_id = parts[0]
         
         if not can_control_instance(user_id, instance_id):
-            return f"access to instance `{instance_id}` denied"
+            return f"Access to instance `{instance_id}` denied."
         
         # Get current state
         current_state = get_instance_state(instance_id)
@@ -42,7 +42,7 @@ def handle_ec2_power(request):
         instance_id, power_state = parts
         
         if not can_control_instance(user_id, instance_id):
-            return f"access to instance `{instance_id}` denied"
+            return f"Access to instance `{instance_id}` denied."
         
         if power_state not in ['on', 'off']:
             return "Power state must be 'on' or 'off'."
@@ -70,3 +70,33 @@ def handle_ec2_power(request):
     
     else:
         return "Usage: <instance-id> [on|off]"
+
+def handle_help(request):
+    """Handle the help endpoint"""
+    help_text = """Available Commands:
+
+*Admin Check:*
+• `/admin/check` - Check if a user is an administrator
+  Usage: POST with `user_id` and `user_name` parameters
+
+*EC2 Instance Control:*
+• `/ec2/power` or `/ec2-power-state` - Control EC2 instance power states
+  Usage: POST with `user_id` and `text` parameters
+  
+  Text format:
+  - `<instance-id>` - Get current state of instance
+  - `<instance-id> on` - Start the instance
+  - `<instance-id> off` - Stop the instance
+  
+  Examples:
+  - `i-0fff0f1804788ae88` - Check status
+  - `i-0fff0f1804788ae88 on` - Start instance
+  - `i-0fff0f1804788ae88 off` - Stop instance
+
+*Health Check:*
+• `/health` - Check if the service is running
+  Returns: `{"status": "ok"}`
+
+Note: You can only control instances that are assigned to your user ID."""
+    
+    return help_text
