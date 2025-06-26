@@ -1,5 +1,7 @@
 import logging
 import re
+import json
+from datetime import datetime
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
 from src.auth import is_admin, get_user_instances
@@ -7,10 +9,27 @@ from src.schedule import parse_time, get_schedule, set_schedule, format_schedule
 
 logger = logging.getLogger(__name__)
 
+def _log_user_action(user_id, user_name, action, target, details=None, success=True):
+    """Log user actions for auditing purposes"""
+    timestamp = datetime.utcnow().isoformat()
+    status = "SUCCESS" if success else "FAILED"
+    log_entry = {
+        'timestamp': timestamp,
+        'user_id': user_id,
+        'user_name': user_name,
+        'action': action,
+        'target': target,
+        'details': details,
+        'status': status
+    }
+    logger.info(f"AUDIT: {json.dumps(log_entry)}")
+
 def handle_admin_check(request):
     """Handle the admin check endpoint"""
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
+    
+    _log_user_action(user_id, user_name, "admin_check", "system", {"authenticated": bool(user_id)})
     
     if is_admin(user_id):
         return f"User: `{user_name}` is authenticated and can access all instances."
@@ -26,10 +45,12 @@ def _is_valid_instance_id(instance_id):
 def handle_ec2_power(request):
     """Handle the EC2 power control endpoint"""
     user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
     text = request.form.get('text', '').strip()
     
     # Check if user is authenticated
     if not user_id:
+        _log_user_action(user_id, user_name, "ec2_power", "unknown", {"error": "authentication_required"}, False)
         return "Error: Authentication required. Please ensure you're logged into Slack."
     
     # Parse text: "instance-id" or "instance-name" or "instance-id on" or "instance-name on"
@@ -43,6 +64,7 @@ def handle_ec2_power(request):
         instance_id = resolve_instance_identifier(instance_identifier)
         logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_power_status", instance_identifier, {"error": "instance_not_found"}, False)
             return f"Instance `{instance_identifier}` not found"
         
         # Get current state using the resolved instance ID
@@ -52,8 +74,19 @@ def handle_ec2_power(request):
             # Get instance name for display if available
             instance_name = get_instance_name(instance_id)
             display_name = instance_name if instance_name else instance_id
+            
+            _log_user_action(user_id, user_name, "ec2_power_status", instance_id, {
+                "instance_name": instance_name,
+                "current_state": current_state,
+                "original_identifier": instance_identifier
+            })
+            
             return f"Instance `{display_name}` ({instance_id}) is currently {current_state}"
         else:
+            _log_user_action(user_id, user_name, "ec2_power_status", instance_id, {
+                "error": "instance_not_found_in_aws",
+                "original_identifier": instance_identifier
+            }, False)
             return f"Instance `{instance_identifier}` not found"
     
     elif len(parts) == 2:
@@ -64,14 +97,29 @@ def handle_ec2_power(request):
         instance_id = resolve_instance_identifier(instance_identifier)
         logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_power_change", instance_identifier, {
+                "power_state": power_state,
+                "error": "instance_not_found"
+            }, False)
             return f"Instance `{instance_identifier}` not found"
         
         if power_state not in ['on', 'off']:
+            _log_user_action(user_id, user_name, "ec2_power_change", instance_id, {
+                "power_state": power_state,
+                "error": "invalid_power_state"
+            }, False)
             return "Power state must be 'on' or 'off'."
         
         # Get instance name for display if available
         instance_name = get_instance_name(instance_id)
         display_name = instance_name if instance_name else instance_id
+        
+        # Log the power change attempt
+        _log_user_action(user_id, user_name, "ec2_power_change", instance_id, {
+            "instance_name": instance_name,
+            "power_state": power_state,
+            "original_identifier": instance_identifier
+        })
         
         # Respond immediately
         response = jsonify({
@@ -87,15 +135,26 @@ def handle_ec2_power(request):
             
             # Change the state
             if power_state == 'on':
-                start_instance(instance_id)
+                success = start_instance(instance_id)
             else:
-                stop_instance(instance_id)
+                success = stop_instance(instance_id)
+            
+            # Log the AWS operation result
+            _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {
+                "instance_name": instance_name,
+                "previous_state": current_state,
+                "aws_operation_success": success
+            }, success)
         else:
             logger.error(f"AWS: Instance `{instance_id}` not found")
+            _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {
+                "error": "instance_not_found_in_aws"
+            }, False)
         
         return response
     
     else:
+        _log_user_action(user_id, user_name, "ec2_power", "invalid", {"error": "invalid_format", "text": text}, False)
         return "Usage: <instance-id|instance-name> [on|off]"
 
 def handle_list_instances(request):
@@ -104,18 +163,28 @@ def handle_list_instances(request):
     user_name = request.form.get('user_name', 'Unknown')
     
     if not user_id:
+        _log_user_action(user_id, user_name, "list_instances", "unknown", {"error": "authentication_required"}, False)
         return "Error: Authentication required. Please ensure you're logged into Slack."
     
     instances = get_user_instances(user_id)
     
     if not instances:
+        _log_user_action(user_id, user_name, "list_instances", "all", {"instance_count": 0})
         return f"No instances found in the AWS region."
     
     # Get current state for each instance
     instance_states = []
+    instance_details = []
     for instance_id in instances:
         state = get_instance_state(instance_id)
         instance_name = get_instance_name(instance_id)
+        
+        instance_detail = {
+            "instance_id": instance_id,
+            "instance_name": instance_name,
+            "state": state
+        }
+        instance_details.append(instance_detail)
         
         if state:
             if instance_name:
@@ -128,6 +197,12 @@ def handle_list_instances(request):
             else:
                 instance_states.append(f"`{instance_id}` - unknown state")
     
+    # Log the list instances action
+    _log_user_action(user_id, user_name, "list_instances", "all", {
+        "instance_count": len(instances),
+        "instances": instance_details
+    })
+    
     response = f"All instances in AWS region:\n"
     response += "\n".join(f"• {instance}" for instance in instance_states)
     
@@ -136,10 +211,12 @@ def handle_list_instances(request):
 def handle_ec2_schedule(request):
     """Handle the EC2 schedule endpoint"""
     user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
     text = request.form.get('text', '').strip()
     
     # Check if user is authenticated
     if not user_id:
+        _log_user_action(user_id, user_name, "ec2_schedule", "unknown", {"error": "authentication_required"}, False)
         return "Error: Authentication required. Please ensure you're logged into Slack."
     
     # Parse text: "instance-id" or "instance-name" or "instance-id start_time to stop_time" or "instance-id clear"
@@ -153,6 +230,7 @@ def handle_ec2_schedule(request):
         instance_id = resolve_instance_identifier(instance_identifier)
         logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_schedule_get", instance_identifier, {"error": "instance_not_found"}, False)
             return f"Instance `{instance_identifier}` not found"
         
         # Get current schedule
@@ -163,6 +241,13 @@ def handle_ec2_schedule(request):
         display_name = instance_name if instance_name else instance_id
         
         schedule_display = format_schedule_display(schedule)
+        
+        _log_user_action(user_id, user_name, "ec2_schedule_get", instance_id, {
+            "instance_name": instance_name,
+            "schedule": schedule,
+            "original_identifier": instance_identifier
+        })
+        
         return f"Schedule for `{display_name}` ({instance_id}): {schedule_display}"
     
     elif len(parts) == 2:
@@ -173,17 +258,30 @@ def handle_ec2_schedule(request):
         instance_id = resolve_instance_identifier(instance_identifier)
         logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_schedule_clear", instance_identifier, {
+                "command": command,
+                "error": "instance_not_found"
+            }, False)
             return f"Instance `{instance_identifier}` not found"
         
         # Check if this is a clear command
         clear_commands = ['clear', 'reset', 'unset', 'no', 'remove', 'delete']
         if command.lower() in clear_commands:
             # Clear the schedule
-            if delete_schedule(instance_id):
-                # Get instance name for display if available
-                instance_name = get_instance_name(instance_id)
-                display_name = instance_name if instance_name else instance_id
-                
+            success = delete_schedule(instance_id)
+            
+            # Get instance name for display if available
+            instance_name = get_instance_name(instance_id)
+            display_name = instance_name if instance_name else instance_id
+            
+            _log_user_action(user_id, user_name, "ec2_schedule_clear", instance_id, {
+                "instance_name": instance_name,
+                "command": command,
+                "original_identifier": instance_identifier,
+                "operation_success": success
+            }, success)
+            
+            if success:
                 response = jsonify({
                     'response_type': 'ephemeral',
                     'text': f"Schedule cleared for `{display_name}` ({instance_id})"
@@ -193,6 +291,10 @@ def handle_ec2_schedule(request):
                 return f"Failed to clear schedule for `{instance_identifier}`"
         else:
             # Not a clear command, probably invalid format
+            _log_user_action(user_id, user_name, "ec2_schedule", "invalid", {
+                "error": "invalid_format",
+                "text": text
+            }, False)
             return "Usage: <instance-id|instance-name> [<start_time> to <stop_time>] or <instance-id|instance-name> clear"
     
     elif len(parts) >= 4:
@@ -203,12 +305,19 @@ def handle_ec2_schedule(request):
         instance_id = resolve_instance_identifier(instance_identifier)
         logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
         if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_identifier, {
+                "error": "instance_not_found"
+            }, False)
             return f"Instance `{instance_identifier}` not found"
         
         # Find "to" keyword to separate start and stop times
         try:
             to_index = parts.index('to')
             if to_index < 2 or to_index >= len(parts) - 1:
+                _log_user_action(user_id, user_name, "ec2_schedule", "invalid", {
+                    "error": "invalid_format",
+                    "text": text
+                }, False)
                 return "Usage: <instance-id|instance-name> <start_time> to <stop_time> or <instance-id|instance-name> clear"
             
             start_time_parts = parts[1:to_index]
@@ -218,6 +327,10 @@ def handle_ec2_schedule(request):
             stop_time_str = ' '.join(stop_time_parts)
             
         except ValueError:
+            _log_user_action(user_id, user_name, "ec2_schedule", "invalid", {
+                "error": "invalid_format",
+                "text": text
+            }, False)
             return "Usage: <instance-id|instance-name> <start_time> to <stop_time> or <instance-id|instance-name> clear"
         
         # Parse times
@@ -225,8 +338,16 @@ def handle_ec2_schedule(request):
         stop_time = parse_time(stop_time_str)
         
         if not start_time:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "invalid_start_time",
+                "start_time": start_time_str
+            }, False)
             return f"Invalid start time: {start_time_str}"
         if not stop_time:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "invalid_stop_time",
+                "stop_time": stop_time_str
+            }, False)
             return f"Invalid stop time: {stop_time_str}"
         
         # Get instance name for display if available
@@ -238,13 +359,28 @@ def handle_ec2_schedule(request):
             start_display = start_time.strftime('%I:%M %p').lstrip('0')
             stop_display = stop_time.strftime('%I:%M %p').lstrip('0')
             
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "instance_name": instance_name,
+                "start_time": start_time_str,
+                "stop_time": stop_time_str,
+                "start_display": start_display,
+                "stop_display": stop_display
+            })
+            
             response = jsonify({
                 'response_type': 'ephemeral',
                 'text': f"Schedule set for `{display_name}` ({instance_id}): {start_display} to {stop_display}"
             })
             return response
         else:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "failed_to_set_schedule"
+            }, False)
             return f"Failed to set schedule for `{display_name}` ({instance_id})"
     
     else:
+        _log_user_action(user_id, user_name, "ec2_schedule", "invalid", {
+            "error": "invalid_format",
+            "text": text
+        }, False)
         return "Usage: <instance-id|instance-name> [<start_time> to <stop_time>] or <instance-id|instance-name> clear"

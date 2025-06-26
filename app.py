@@ -5,10 +5,74 @@ Simple Flask App
 
 from flask import Flask, request
 import logging
+import json
+from datetime import datetime
 from src.handlers import handle_admin_check, handle_ec2_power, handle_list_instances, handle_ec2_schedule
 
 app = Flask(__name__)
-logging.basicConfig(level=logging.INFO)
+
+# Configure structured logging
+class StructuredFormatter(logging.Formatter):
+    """Custom formatter for structured JSON logging"""
+    def format(self, record):
+        # If the message is already a JSON string, parse it
+        if record.getMessage().startswith('AUDIT:') or record.getMessage().startswith('AWS_AUDIT:') or record.getMessage().startswith('SCHEDULE_AUDIT:') or record.getMessage().startswith('REQUEST_AUDIT:'):
+            # Extract the JSON part after the prefix
+            prefix, json_str = record.getMessage().split(' ', 1)
+            try:
+                # Parse the JSON and add standard fields
+                log_data = json.loads(json_str)
+                log_data['level'] = record.levelname
+                log_data['logger'] = record.name
+                return json.dumps(log_data)
+            except json.JSONDecodeError:
+                # Fall back to regular formatting if JSON parsing fails
+                pass
+        
+        # Regular log message formatting
+        return super().format(record)
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# Apply structured formatter to root logger
+root_logger = logging.getLogger()
+for handler in root_logger.handlers:
+    handler.setFormatter(StructuredFormatter())
+
+def _log_request():
+    """Log incoming requests for auditing purposes"""
+    timestamp = datetime.utcnow().isoformat()
+    user_id = request.form.get('user_id', 'unknown')
+    user_name = request.form.get('user_name', 'unknown')
+    
+    log_entry = {
+        'timestamp': timestamp,
+        'method': request.method,
+        'endpoint': request.endpoint,
+        'user_id': user_id,
+        'user_name': user_name,
+        'remote_addr': request.remote_addr,
+        'user_agent': request.headers.get('User-Agent', 'unknown')
+    }
+    
+    # Log form data for POST requests (excluding sensitive data)
+    if request.method == 'POST' and request.form:
+        form_data = dict(request.form)
+        # Remove potentially sensitive data
+        if 'text' in form_data:
+            form_data['text'] = form_data['text'][:100] + '...' if len(form_data['text']) > 100 else form_data['text']
+        log_entry['form_data'] = form_data
+    
+    logging.info(f"REQUEST_AUDIT: {json.dumps(log_entry)}")
+
+@app.before_request
+def before_request():
+    """Log all incoming requests"""
+    _log_request()
 
 @app.route('/health')
 def health():
