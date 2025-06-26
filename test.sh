@@ -7,5 +7,5 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# Run tests
-python3 test_app.py 
+# Run tests with pytest for better reporting
+python -m pytest test/ -v --tb=short 
