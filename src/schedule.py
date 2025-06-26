@@ -10,8 +10,12 @@ logger = logging.getLogger(__name__)
 SCHEDULE_DIR = os.environ.get('SCHEDULE_DIR', '/app/schedules')
 SCHEDULE_FILE = os.path.join(SCHEDULE_DIR, 'schedules.json')
 
-# Ensure directory exists
-os.makedirs(SCHEDULE_DIR, exist_ok=True)
+# Ensure directory exists (only if not in test environment)
+if not os.environ.get('TESTING'):
+    try:
+        os.makedirs(SCHEDULE_DIR, exist_ok=True)
+    except OSError:
+        logger.warning(f"Could not create schedule directory {SCHEDULE_DIR}")
 
 def _log_schedule_operation(operation, instance_id, details=None, success=True):
     """Log schedule operations for auditing purposes"""
