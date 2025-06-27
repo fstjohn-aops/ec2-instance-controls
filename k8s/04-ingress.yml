@@ -15,15 +15,15 @@ metadata:
   name: ec2-slack-bot
   namespace: ec2-slack-bot
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     traefik.ingress.kubernetes.io/router.tls: "true"
 spec:
   tls:
     - hosts:
-        - ec2-slack-bot.aops.ninja
+        - ec2-slack-bot.notaops.com
       secretName: ec2-slack-bot-tls
   rules:
-    - host: ec2-slack-bot.aops.ninja
+    - host: ec2-slack-bot.notaops.com
       http:
         paths:
           - path: /

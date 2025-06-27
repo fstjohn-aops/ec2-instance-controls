@@ -13,6 +13,33 @@ metadata:
 iam:
   podIdentityAssociations:
     - namespace: ec2-slack-bot
-      serviceAccountName: ack-ec2-controller
-      permissionPolicyARNs:
-        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+      serviceAccountName: ec2-instance-controls
+      permissionPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "ec2:*"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "kms:CreateGrant"
+              - "kms:Decrypt"
+              - "kms:DescribeKey"
+              - "kms:GenerateDataKey"
+              - "kms:GenerateDataKeyWithoutPlaintext"
+              - "kms:ReEncrypt"
+              - "kms:ListKeys"
+              - "kms:ListAliases"
+              - "kms:ListGrants"
+              - "kms:ListKeyPolicies"
+              - "kms:GetKeyPolicy"
+              - "kms:PutKeyPolicy"
+            Resource: "*"
+          - Effect: Allow
+            Action:
+              - "iam:PassRole"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "iam:PassedToService": "ec2.amazonaws.com"

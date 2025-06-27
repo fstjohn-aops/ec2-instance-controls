@@ -16,13 +16,6 @@ _ec2_client = None
 def _get_ec2_client():
     """Get or create the EC2 client with proper region configuration"""
 
-    # Log all available environment variables
-    env_vars = {}
-    for key, value in os.environ.items():
-        env_vars[key] = value
-    
-    logger.info(f"ENVIRONMENT_VARS: {json.dumps(env_vars)}")
-
     global _ec2_client
     if _ec2_client is None:
         try:
