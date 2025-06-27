@@ -2,6 +2,10 @@
 
 # Check if tag parameter is provided
 if [ -z "$1" ]; then
+    echo "No tag provided. Available tags in registry:"
+    REGISTRY=${REGISTRY:-"cr.aops.tools/aops-docker-repo"}
+    podman search --list-tags $REGISTRY/ec2-instance-controls 2>/dev/null | grep -v "TAG" | head -20
+    echo ""
     echo "Usage: $0 <tag>"
     echo "Example: $0 v1.0.0"
     exit 1
