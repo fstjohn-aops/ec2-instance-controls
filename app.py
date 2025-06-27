@@ -30,8 +30,17 @@ class StructuredFormatter(logging.Formatter):
                 # Fall back to regular formatting if JSON parsing fails
                 pass
         
-        # Regular log message formatting
-        return super().format(record)
+        # Convert plain text logs to structured JSON format
+        log_data = {
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'level': record.levelname,
+            'logger': record.name,
+            'message': record.getMessage(),
+            'pod_name': os.environ.get('HOSTNAME', 'unknown'),
+            'namespace': os.environ.get('POD_NAMESPACE', 'unknown'),
+            'deployment': os.environ.get('DEPLOYMENT_NAME', 'unknown')
+        }
+        return json.dumps(log_data)
 
 # Configure logging
 logging.basicConfig(
