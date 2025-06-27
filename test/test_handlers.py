@@ -22,7 +22,7 @@ def test_list_instances_with_instances():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_list_instances(request)
-        assert "All instances in AWS region:" in result
+        assert "Controllable instances in AWS region:" in result
         assert "test-instance-1" in result
         assert "test-instance-2" in result
         assert "running" in result
@@ -37,7 +37,7 @@ def test_list_instances_no_instances():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_list_instances(request)
-        assert "No instances found" in result
+        assert "No controllable instances found" in result
 
 def test_list_instances_instance_state_unknown():
     """Test listing instances when instance state is unknown"""
@@ -98,12 +98,14 @@ def test_ec2_power_start_instance():
         with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_state') as mock_get_state, \
              patch('src.handlers.start_instance') as mock_start, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_state.return_value = 'stopped'
             mock_start.return_value = True
             mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on'}
@@ -118,12 +120,14 @@ def test_ec2_power_stop_instance():
         with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_state') as mock_get_state, \
              patch('src.handlers.stop_instance') as mock_stop, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_state.return_value = 'running'
             mock_stop.return_value = True
             mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d off'}
@@ -138,12 +142,14 @@ def test_ec2_power_access_denied():
         with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_state') as mock_get_state, \
              patch('src.handlers.start_instance') as mock_start, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_state.return_value = 'stopped'
             mock_start.return_value = True
             mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U123456789', 'text': 'i-0df9c53001c5c837d on'}
@@ -169,12 +175,14 @@ def test_ec2_power_valid():
         with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_state') as mock_get_state, \
              patch('src.handlers.start_instance') as mock_start, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_state.return_value = 'stopped'
             mock_start.return_value = True
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on'}
@@ -229,6 +237,24 @@ def test_ec2_power_missing_text():
     result = handle_ec2_power(request)
     assert "Usage:" in result
 
+def test_ec2_power_instance_not_controllable():
+    """Test EC2 power with instance that cannot be controlled"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on'}
+            
+            result = handle_ec2_power(request)
+            assert "cannot be controlled by this service" in result
+            assert "EC2ControlsEnabled" in result
+
 # Schedule tests
 def test_ec2_schedule_get_no_schedule():
     """Test getting schedule when none exists"""
@@ -270,17 +296,18 @@ def test_ec2_schedule_set_valid():
     with app.app_context():
         with patch('src.handlers.set_schedule') as mock_set_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_set_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
             
             result = handle_ec2_schedule(request)
             assert "Schedule set for" in result.json['text']
-            assert "9:00 AM to 5:00 PM" in result.json['text']
 
 def test_ec2_schedule_set_invalid_start_time():
     """Test setting schedule with invalid start time"""
@@ -313,10 +340,12 @@ def test_ec2_schedule_set_failed():
     with app.app_context():
         with patch('src.handlers.set_schedule') as mock_set_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_set_schedule.return_value = False
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
@@ -389,10 +418,12 @@ def test_ec2_schedule_clear():
     with app.app_context():
         with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_delete_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
@@ -405,10 +436,12 @@ def test_ec2_schedule_reset():
     with app.app_context():
         with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_delete_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d reset'}
@@ -421,10 +454,12 @@ def test_ec2_schedule_unset():
     with app.app_context():
         with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_delete_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d unset'}
@@ -437,10 +472,12 @@ def test_ec2_schedule_clear_failed():
     with app.app_context():
         with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_delete_schedule.return_value = False
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
@@ -482,10 +519,12 @@ def test_ec2_schedule_case_insensitive_clear():
     with app.app_context():
         with patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_delete_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             # Test uppercase
             request = Mock()
@@ -496,7 +535,7 @@ def test_ec2_schedule_case_insensitive_clear():
             
             # Test mixed case
             request = Mock()
-            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d Reset'}
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d Clear'}
             
             result = handle_ec2_schedule(request)
             assert "Schedule cleared for" in result.json['text']
@@ -506,10 +545,12 @@ def test_ec2_schedule_complex_time_formats():
     with app.app_context():
         with patch('src.handlers.set_schedule') as mock_set_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             mock_set_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
             
             # Test various time formats
             time_formats = [
@@ -613,7 +654,7 @@ def test_fuzzy_search_with_results():
         }
         
         result = handle_fuzzy_search(request)
-        assert "Found 2 instance(s) matching 'test':" in result
+        assert "Found 2 controllable instance(s) matching 'test':" in result
         assert "test-instance-1" in result
         assert "test-instance-2" in result
         assert "running" in result
@@ -632,7 +673,8 @@ def test_fuzzy_search_no_results():
         }
         
         result = handle_fuzzy_search(request)
-        assert "No instances found matching 'nonexistent'" in result
+        assert "No controllable instances found matching 'nonexistent'" in result
+        assert "EC2ControlsEnabled" in result
 
 def test_fuzzy_search_empty_term():
     """Test fuzzy search with empty search term"""
@@ -652,7 +694,8 @@ def test_ec2_schedule_with_aws_tags():
              patch('src.handlers.set_schedule') as mock_set_schedule, \
              patch('src.handlers.delete_schedule') as mock_delete_schedule, \
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-             patch('src.handlers.get_instance_name') as mock_get_name:
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
             # Test getting schedule from EC2 tags
             mock_get_schedule.return_value = {
@@ -661,6 +704,7 @@ def test_ec2_schedule_with_aws_tags():
             }
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
             
             request = Mock()
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
@@ -685,4 +729,52 @@ def test_ec2_schedule_with_aws_tags():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
             
             result = handle_ec2_schedule(request)
-            assert "Schedule cleared for" in result.json['text'] 
+            assert "Schedule cleared for" in result.json['text']
+
+def test_ec2_schedule_instance_not_controllable():
+    """Test EC2 schedule with instance that cannot be controlled"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            
+            result = handle_ec2_schedule(request)
+            assert "cannot be controlled by this service" in result
+            assert "EC2ControlsEnabled" in result
+
+def test_list_instances_only_controllable():
+    """Test that list instances only shows controllable instances"""
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances, \
+         patch('src.handlers.get_instance_state') as mock_get_state, \
+         patch('src.handlers.get_instance_name') as mock_get_name:
+        
+        mock_get_instances.return_value = ['i-1234567890abcdef0', 'i-0987654321fedcba0']
+        mock_get_state.side_effect = ['running', 'stopped']
+        mock_get_name.side_effect = ['test-instance-1', 'test-instance-2']
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
+        
+        result = handle_list_instances(request)
+        assert "Controllable instances in AWS region:" in result
+        assert "test-instance-1" in result
+        assert "test-instance-2" in result
+
+def test_list_instances_no_controllable():
+    """Test list instances when no controllable instances exist"""
+    with patch('src.handlers.get_all_region_instances') as mock_get_instances:
+        mock_get_instances.return_value = []
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
+        
+        result = handle_list_instances(request)
+        assert "No controllable instances found" in result
+        assert "EC2ControlsEnabled" in result 

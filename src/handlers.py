@@ -3,7 +3,7 @@ import re
 import json
 from datetime import datetime, timezone
 from flask import jsonify
-from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances
+from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id
 from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 import os
@@ -97,6 +97,17 @@ def handle_ec2_power(request):
             }, False)
             return "Power state must be 'on' or 'off'."
         
+        # Check if instance can be controlled by this service
+        if not can_control_instance_by_id(instance_id):
+            instance_name = get_instance_name(instance_id)
+            display_name = instance_name if instance_name else instance_id
+            _log_user_action(user_id, user_name, "ec2_power_change", instance_id, {
+                "power_state": power_state,
+                "error": "instance_not_controllable",
+                "instance_name": instance_name
+            }, False)
+            return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+        
         # Get instance name for display if available
         instance_name = get_instance_name(instance_id)
         display_name = instance_name if instance_name else instance_id
@@ -145,7 +156,7 @@ def handle_ec2_power(request):
         return "Usage: <instance-id|instance-name> [on|off]"
 
 def handle_list_instances(request):
-    """Handle the list instances endpoint - returns all instances in the AWS region"""
+    """Handle the list instances endpoint - returns all instances in the AWS region that can be controlled by this service"""
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     
@@ -153,7 +164,7 @@ def handle_list_instances(request):
     
     if not instances:
         _log_user_action(user_id, user_name, "list_instances", "all", {"instance_count": 0})
-        return f"No instances found in the AWS region."
+        return f"No controllable instances found in the AWS region. Add the `EC2ControlsEnabled` tag with a truthy value to instances you want to control."
     
     # Get current state for each instance
     instance_states = []
@@ -186,7 +197,7 @@ def handle_list_instances(request):
         "instances": instance_details
     })
     
-    response = f"All instances in AWS region:\n"
+    response = f"Controllable instances in AWS region:\n"
     response += "\n".join(f"• {instance}" for instance in instance_states)
     
     return response
@@ -245,6 +256,17 @@ def handle_ec2_schedule(request):
         # Check if this is a clear command
         clear_commands = ['clear', 'reset', 'unset', 'no', 'remove', 'delete']
         if command.lower() in clear_commands:
+            # Check if instance can be controlled by this service
+            if not can_control_instance_by_id(instance_id):
+                instance_name = get_instance_name(instance_id)
+                display_name = instance_name if instance_name else instance_id
+                _log_user_action(user_id, user_name, "ec2_schedule_clear", instance_id, {
+                    "command": command,
+                    "error": "instance_not_controllable",
+                    "instance_name": instance_name
+                }, False)
+                return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+            
             # Clear the schedule
             success = delete_schedule(instance_id)
             
@@ -332,6 +354,16 @@ def handle_ec2_schedule(request):
         instance_name = get_instance_name(instance_id)
         display_name = instance_name if instance_name else instance_id
         
+        # Check if instance can be controlled by this service
+        if not can_control_instance_by_id(instance_id):
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "instance_not_controllable",
+                "instance_name": instance_name,
+                "start_time": start_time_str,
+                "stop_time": stop_time_str
+            }, False)
+            return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+        
         # Set the schedule
         if set_schedule(instance_id, start_time, stop_time):
             start_display = start_time.strftime('%I:%M %p').lstrip('0')
@@ -364,7 +396,7 @@ def handle_ec2_schedule(request):
         return "Usage: <instance-id|instance-name> [<start_time> to <stop_time>] or <instance-id|instance-name> clear"
 
 def handle_fuzzy_search(request):
-    """Handle the fuzzy search endpoint - search instances by name or ID"""
+    """Handle the fuzzy search endpoint - search controllable instances by name or ID"""
     user_id = request.form.get('user_id', '')
     user_name = request.form.get('user_name', 'Unknown')
     text = request.form.get('text', '').strip()
@@ -381,7 +413,7 @@ def handle_fuzzy_search(request):
             "search_term": text,
             "results_count": 0
         })
-        return f"No instances found matching '{text}'"
+        return f"No controllable instances found matching '{text}'. Add the `EC2ControlsEnabled` tag with a truthy value to instances you want to control."
     
     # Format results
     instance_states = []
@@ -411,7 +443,7 @@ def handle_fuzzy_search(request):
         "instances": instance_details
     })
     
-    response = f"Found {len(matching_instances)} instance(s) matching '{text}':\n"
+    response = f"Found {len(matching_instances)} controllable instance(s) matching '{text}':\n"
     response += "\n".join(f"• {instance}" for instance in instance_states)
     
     return response

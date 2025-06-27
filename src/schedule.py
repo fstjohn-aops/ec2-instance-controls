@@ -3,7 +3,7 @@ from datetime import datetime, time, timezone
 from dateutil import parser
 import json
 import os
-from src.aws_client import get_power_schedule_tags, set_power_schedule_tags, delete_power_schedule_tags
+from src.aws_client import get_power_schedule_tags, set_power_schedule_tags, delete_power_schedule_tags, can_control_instance_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +97,16 @@ def set_schedule(instance_id, start_time, stop_time):
     try:
         logger.info(f"Setting schedule for instance {instance_id}: {start_time} to {stop_time}")
         
+        # Check if instance can be controlled by this service
+        if not can_control_instance_by_id(instance_id):
+            logger.error(f"Cannot set schedule for instance {instance_id}: not authorized to control this instance")
+            _log_schedule_operation("set_schedule", instance_id, {
+                "error": "instance_not_controllable",
+                "start_time": str(start_time),
+                "stop_time": str(stop_time)
+            }, False)
+            return False
+        
         # Format times for EC2 tags
         on_time_str = format_time_for_tag(start_time)
         off_time_str = format_time_for_tag(stop_time)
@@ -141,6 +151,14 @@ def delete_schedule(instance_id):
     """Delete schedule for an instance by removing EC2 tags"""
     try:
         logger.info(f"Deleting schedule for instance {instance_id}")
+        
+        # Check if instance can be controlled by this service
+        if not can_control_instance_by_id(instance_id):
+            logger.error(f"Cannot delete schedule for instance {instance_id}: not authorized to control this instance")
+            _log_schedule_operation("delete_schedule", instance_id, {
+                "error": "instance_not_controllable"
+            }, False)
+            return False
         
         # Delete the EC2 tags
         success = delete_power_schedule_tags(instance_id)

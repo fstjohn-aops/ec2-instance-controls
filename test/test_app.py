@@ -61,7 +61,7 @@ def test_instances_endpoint_with_params(client):
         })
         
         assert response.status_code == 200
-        assert "No instances found" in response.get_data(as_text=True)
+        assert "No controllable instances found" in response.get_data(as_text=True)
 
 def test_ec2_power_endpoint_with_params(client):
     """Test EC2 power endpoint with valid parameters"""
@@ -108,7 +108,7 @@ def test_search_endpoint_with_params(client):
         
         assert response.status_code == 200
         response_text = response.get_data(as_text=True)
-        assert "Found 1 instance(s) matching 'test':" in response_text
+        assert "Found 1 controllable instance(s) matching 'test':" in response_text
         assert "test-instance" in response_text
 
 def test_search_endpoint_empty_term(client):

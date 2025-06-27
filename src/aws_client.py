@@ -66,8 +66,31 @@ def get_instance_state(instance_id):
         _log_aws_operation("describe_instances", instance_id, {"error": str(e)}, False, e)
         return None
 
+def can_control_instance_by_id(instance_id):
+    """Check if a specific instance can be controlled by this service"""
+    try:
+        instance = get_instance_details(instance_id)
+        if not instance:
+            logger.warning(f"Cannot control instance {instance_id}: instance not found")
+            return False
+        
+        can_control = can_control_instance(instance)
+        if not can_control:
+            logger.warning(f"Cannot control instance {instance_id}: EC2ControlsEnabled tag not set to truthy value")
+        
+        return can_control
+    except Exception as e:
+        logger.error(f"Error checking if instance {instance_id} can be controlled: {e}")
+        return False
+
 def start_instance(instance_id):
     """Start an EC2 instance"""
+    # Check if instance can be controlled before starting
+    if not can_control_instance_by_id(instance_id):
+        logger.error(f"Cannot start instance {instance_id}: not authorized to control this instance")
+        _log_aws_operation("start_instances", instance_id, {"error": "instance_not_controllable"}, False)
+        return False
+    
     try:
         response = _get_ec2_client().start_instances(InstanceIds=[instance_id])
         logger.info(f"AWS: Started {instance_id}")
@@ -83,6 +106,12 @@ def start_instance(instance_id):
 
 def stop_instance(instance_id):
     """Stop an EC2 instance"""
+    # Check if instance can be controlled before stopping
+    if not can_control_instance_by_id(instance_id):
+        logger.error(f"Cannot stop instance {instance_id}: not authorized to control this instance")
+        _log_aws_operation("stop_instances", instance_id, {"error": "instance_not_controllable"}, False)
+        return False
+    
     try:
         response = _get_ec2_client().stop_instances(InstanceIds=[instance_id])
         logger.info(f"AWS: Stopped {instance_id}")
@@ -97,9 +126,9 @@ def stop_instance(instance_id):
         return False
 
 def get_instance_by_name(instance_name):
-    """Find an EC2 instance by its Name tag"""
+    """Find an EC2 instance by its Name tag - only returns controllable instances"""
     try:
-        logger.info(f"Searching for instance with Name tag: {instance_name}")
+        logger.info(f"Searching for controllable instance with Name tag: {instance_name}")
         response = _get_ec2_client().describe_instances(
             Filters=[
                 {
@@ -116,13 +145,15 @@ def get_instance_by_name(instance_name):
         instances = []
         for reservation in response['Reservations']:
             for instance in reservation['Instances']:
-                instances.append(instance)
+                # Only include instances that can be controlled
+                if can_control_instance(instance):
+                    instances.append(instance)
         
-        logger.info(f"Found {len(instances)} instances with name '{instance_name}'")
+        logger.info(f"Found {len(instances)} controllable instances with name '{instance_name}'")
         
         if len(instances) == 1:
             instance_id = instances[0]['InstanceId']
-            logger.info(f"Returning single instance: {instance_id}")
+            logger.info(f"Returning single controllable instance: {instance_id}")
             _log_aws_operation("describe_instances_by_name", instance_name, {
                 "found_instance_id": instance_id,
                 "instance_count": 1
@@ -130,20 +161,20 @@ def get_instance_by_name(instance_name):
             return instance_id
         elif len(instances) > 1:
             instance_ids = [i['InstanceId'] for i in instances]
-            logger.warning(f"Multiple instances found with name '{instance_name}': {instance_ids}")
+            logger.warning(f"Multiple controllable instances found with name '{instance_name}': {instance_ids}")
             _log_aws_operation("describe_instances_by_name", instance_name, {
-                "error": "multiple_instances_found",
+                "error": "multiple_controllable_instances_found",
                 "instance_ids": instance_ids
             }, False)
             return None
         else:
-            logger.warning(f"No instances found with name '{instance_name}'")
+            logger.warning(f"No controllable instances found with name '{instance_name}'")
             _log_aws_operation("describe_instances_by_name", instance_name, {
-                "error": "no_instances_found"
+                "error": "no_controllable_instances_found"
             }, False)
             return None
     except Exception as e:
-        logger.error(f"AWS Error finding instance by name '{instance_name}': {e}")
+        logger.error(f"AWS Error finding controllable instance by name '{instance_name}': {e}")
         _log_aws_operation("describe_instances_by_name", instance_name, {"error": str(e)}, False, e)
         return None
 
@@ -175,6 +206,22 @@ def get_instance_name(instance_id):
                 return tag['Value']
     return None
 
+def can_control_instance(instance):
+    """Check if an instance can be controlled by this service based on EC2ControlsEnabled tag"""
+    if not instance or 'Tags' not in instance:
+        return False
+    
+    for tag in instance['Tags']:
+        if tag['Key'] == 'EC2ControlsEnabled':
+            # Any truthy value allows control
+            tag_value = tag['Value']
+            if tag_value and str(tag_value).lower() not in ['false', '0', 'no', 'disabled', 'off']:
+                return True
+            return False
+    
+    # No EC2ControlsEnabled tag found - assume false (secure by default)
+    return False
+
 def get_all_instances():
     """Get all EC2 instances in the region"""
     try:
@@ -203,6 +250,24 @@ def get_all_instances():
         _log_aws_operation("describe_instances_all", "all", {"error": str(e)}, False, e)
         return []
 
+def get_controllable_instances():
+    """Get all EC2 instances that can be controlled by this service"""
+    try:
+        all_instances = get_all_instances()
+        controllable_instances = [instance for instance in all_instances if can_control_instance(instance)]
+        
+        logger.info(f"Found {len(controllable_instances)} controllable instances out of {len(all_instances)} total instances")
+        _log_aws_operation("describe_controllable_instances", "all", {
+            "total_instances": len(all_instances),
+            "controllable_instances": len(controllable_instances),
+            "controllable_instance_ids": [i['InstanceId'] for i in controllable_instances]
+        })
+        return controllable_instances
+    except Exception as e:
+        logger.error(f"AWS Error getting controllable instances: {e}")
+        _log_aws_operation("describe_controllable_instances", "all", {"error": str(e)}, False, e)
+        return []
+
 def resolve_instance_identifier(identifier):
     """Resolve an instance identifier (ID or Name) to instance ID"""
     logger.info(f"Resolving instance identifier: {identifier}")
@@ -224,24 +289,12 @@ def resolve_instance_identifier(identifier):
         return None
 
 def fuzzy_search_instances(search_term):
-    """Search for EC2 instances by name or ID using fuzzy matching"""
+    """Search for EC2 instances by name or ID using fuzzy matching - only returns controllable instances"""
     try:
         logger.info(f"Performing fuzzy search for: {search_term}")
         
-        # Get all instances first
-        response = _get_ec2_client().describe_instances(
-            Filters=[
-                {
-                    'Name': 'instance-state-name',
-                    'Values': ['pending', 'running', 'stopping', 'stopped']
-                }
-            ]
-        )
-        
-        instances = []
-        for reservation in response['Reservations']:
-            for instance in reservation['Instances']:
-                instances.append(instance)
+        # Get only controllable instances
+        instances = get_controllable_instances()
         
         # Perform fuzzy matching
         matching_instances = []
@@ -300,7 +353,7 @@ def fuzzy_search_instances(search_term):
             matching_instances = matching_instances[:max_results]
             logger.info(f"Limited results to {max_results} instances")
         
-        logger.info(f"Found {len(matching_instances)} instances matching '{search_term}'")
+        logger.info(f"Found {len(matching_instances)} controllable instances matching '{search_term}'")
         _log_aws_operation("fuzzy_search_instances", search_term, {
             "search_term": search_term,
             "results_count": len(matching_instances),
