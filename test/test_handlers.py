@@ -636,12 +636,53 @@ def test_fuzzy_search_no_results():
 
 def test_fuzzy_search_empty_term():
     """Test fuzzy search with empty search term"""
-    request = Mock()
-    request.form = {
-        'user_id': 'U08QYU6AX0V',
-        'user_name': 'fstjohn',
-        'text': ''
-    }
-    
-    result = handle_fuzzy_search(request)
-    assert "Please provide a search term" in result 
+    with patch('src.handlers.fuzzy_search_instances') as mock_search:
+        mock_search.return_value = []
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': ''}
+        
+        result = handle_fuzzy_search(request)
+        assert "Please provide a search term" in result
+
+def test_ec2_schedule_with_aws_tags():
+    """Test that schedule functions work with EC2 tags"""
+    with app.app_context():
+        with patch('src.handlers.get_schedule') as mock_get_schedule, \
+             patch('src.handlers.set_schedule') as mock_set_schedule, \
+             patch('src.handlers.delete_schedule') as mock_delete_schedule, \
+             patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            # Test getting schedule from EC2 tags
+            mock_get_schedule.return_value = {
+                'start_time': '09:00',
+                'stop_time': '17:00'
+            }
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_schedule(request)
+            assert "9:00 AM to 5:00 PM" in result
+            
+            # Test setting schedule with EC2 tags
+            mock_set_schedule.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 8am to 6pm'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule set for" in result.json['text']
+            assert "8:00 AM to 6:00 PM" in result.json['text']
+            
+            # Test clearing schedule with EC2 tags
+            mock_delete_schedule.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
+            
+            result = handle_ec2_schedule(request)
+            assert "Schedule cleared for" in result.json['text'] 

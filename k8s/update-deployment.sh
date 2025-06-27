@@ -22,4 +22,4 @@ echo "Deployment successfully updated and rolled out!"
 
 # Optional: Display the new pod status
 echo -e "\nNew pod status:"
-kubectl -n ec2-slack-bot get pods -l app=ec2-slack-bot 
+kubectl -n ec2-slack-bot get pods -l app=ec2-slack-bot

@@ -313,3 +313,105 @@ def fuzzy_search_instances(search_term):
         logger.error(f"AWS Error performing fuzzy search for '{search_term}': {e}")
         _log_aws_operation("fuzzy_search_instances", search_term, {"error": str(e)}, False, e)
         return []
+
+def get_instance_tags(instance_id):
+    """Get all tags for an EC2 instance"""
+    try:
+        response = _get_ec2_client().describe_instances(InstanceIds=[instance_id])
+        if response['Reservations']:
+            instance = response['Reservations'][0]['Instances'][0]
+            tags = instance.get('Tags', [])
+            _log_aws_operation("get_instance_tags", instance_id, {
+                "tag_count": len(tags),
+                "tag_keys": [tag['Key'] for tag in tags]
+            })
+            return tags
+        _log_aws_operation("get_instance_tags", instance_id, {"error": "no_reservations_found"}, False)
+        return []
+    except Exception as e:
+        logger.error(f"AWS Error getting instance tags: {e}")
+        _log_aws_operation("get_instance_tags", instance_id, {"error": str(e)}, False, e)
+        return []
+
+def get_power_schedule_tags(instance_id):
+    """Get power schedule tags for an EC2 instance"""
+    tags = get_instance_tags(instance_id)
+    schedule_tags = {}
+    
+    for tag in tags:
+        if tag['Key'] == 'PowerScheduleOnTime':
+            schedule_tags['on_time'] = tag['Value']
+        elif tag['Key'] == 'PowerScheduleOffTime':
+            schedule_tags['off_time'] = tag['Value']
+    
+    _log_aws_operation("get_power_schedule_tags", instance_id, {
+        "schedule_tags_found": schedule_tags
+    })
+    return schedule_tags
+
+def set_power_schedule_tags(instance_id, on_time=None, off_time=None):
+    """Set power schedule tags for an EC2 instance"""
+    try:
+        tags_to_set = []
+        
+        if on_time is not None:
+            tags_to_set.append({
+                'Key': 'PowerScheduleOnTime',
+                'Value': on_time
+            })
+        
+        if off_time is not None:
+            tags_to_set.append({
+                'Key': 'PowerScheduleOffTime',
+                'Value': off_time
+            })
+        
+        if not tags_to_set:
+            logger.warning(f"No tags to set for instance {instance_id}")
+            return False
+        
+        response = _get_ec2_client().create_tags(
+            Resources=[instance_id],
+            Tags=tags_to_set
+        )
+        
+        logger.info(f"Successfully set power schedule tags for {instance_id}: {tags_to_set}")
+        _log_aws_operation("set_power_schedule_tags", instance_id, {
+            "tags_set": [tag['Key'] for tag in tags_to_set],
+            "on_time": on_time,
+            "off_time": off_time
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error setting power schedule tags for {instance_id}: {e}")
+        _log_aws_operation("set_power_schedule_tags", instance_id, {
+            "error": str(e),
+            "on_time": on_time,
+            "off_time": off_time
+        }, False, e)
+        return False
+
+def delete_power_schedule_tags(instance_id):
+    """Delete power schedule tags for an EC2 instance"""
+    try:
+        response = _get_ec2_client().delete_tags(
+            Resources=[instance_id],
+            Tags=[
+                {'Key': 'PowerScheduleOnTime'},
+                {'Key': 'PowerScheduleOffTime'}
+            ]
+        )
+        
+        logger.info(f"Successfully deleted power schedule tags for {instance_id}")
+        _log_aws_operation("delete_power_schedule_tags", instance_id, {
+            "tags_deleted": ["PowerScheduleOnTime", "PowerScheduleOffTime"]
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error deleting power schedule tags for {instance_id}: {e}")
+        _log_aws_operation("delete_power_schedule_tags", instance_id, {
+            "error": str(e)
+        }, False, e)
+        return False
