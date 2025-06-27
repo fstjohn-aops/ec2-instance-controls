@@ -95,6 +95,7 @@ The application uses these environment variables (configured via ConfigMap):
 - `GET /health` - Health check
 - `POST /slack/events` - Slack Events API endpoint
 - `POST /instances` - List all instances in the AWS region
+- `POST /search` - Fuzzy search for instances by name or ID
 - `POST /ec2/power` - Control instance power state
 - `POST /ec2-schedule` - Manage instance schedules
 

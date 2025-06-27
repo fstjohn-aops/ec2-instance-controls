@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch
 from flask import Flask
-from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_fuzzy_search
 from src.schedule import parse_time, format_schedule_display
 
 # Create a test Flask app
@@ -587,4 +587,61 @@ def test_format_schedule_display_midnight():
     """Test formatting display with midnight times"""
     schedule = {'start_time': '00:00', 'stop_time': '23:59'}
     result = format_schedule_display(schedule)
-    assert result == "12:00 AM to 11:59 PM" 
+    assert result == "12:00 AM to 11:59 PM"
+
+def test_fuzzy_search_with_results():
+    """Test fuzzy search with matching instances"""
+    with patch('src.handlers.fuzzy_search_instances') as mock_search:
+        mock_search.return_value = [
+            {
+                'InstanceId': 'i-1234567890abcdef0',
+                'Name': 'test-instance-1',
+                'State': 'running'
+            },
+            {
+                'InstanceId': 'i-0987654321fedcba0',
+                'Name': 'test-instance-2',
+                'State': 'stopped'
+            }
+        ]
+        
+        request = Mock()
+        request.form = {
+            'user_id': 'U08QYU6AX0V',
+            'user_name': 'fstjohn',
+            'text': 'test'
+        }
+        
+        result = handle_fuzzy_search(request)
+        assert "Found 2 instance(s) matching 'test':" in result
+        assert "test-instance-1" in result
+        assert "test-instance-2" in result
+        assert "running" in result
+        assert "stopped" in result
+
+def test_fuzzy_search_no_results():
+    """Test fuzzy search when no instances match"""
+    with patch('src.handlers.fuzzy_search_instances') as mock_search:
+        mock_search.return_value = []
+        
+        request = Mock()
+        request.form = {
+            'user_id': 'U08QYU6AX0V',
+            'user_name': 'fstjohn',
+            'text': 'nonexistent'
+        }
+        
+        result = handle_fuzzy_search(request)
+        assert "No instances found matching 'nonexistent'" in result
+
+def test_fuzzy_search_empty_term():
+    """Test fuzzy search with empty search term"""
+    request = Mock()
+    request.form = {
+        'user_id': 'U08QYU6AX0V',
+        'user_name': 'fstjohn',
+        'text': ''
+    }
+    
+    result = handle_fuzzy_search(request)
+    assert "Please provide a search term" in result 

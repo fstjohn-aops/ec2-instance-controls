@@ -3,7 +3,7 @@ import re
 import json
 from datetime import datetime, timezone
 from flask import jsonify
-from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name
+from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances
 from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 import os
@@ -362,3 +362,56 @@ def handle_ec2_schedule(request):
             "text": text
         }, False)
         return "Usage: <instance-id|instance-name> [<start_time> to <stop_time>] or <instance-id|instance-name> clear"
+
+def handle_fuzzy_search(request):
+    """Handle the fuzzy search endpoint - search instances by name or ID"""
+    user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
+    text = request.form.get('text', '').strip()
+    
+    if not text:
+        _log_user_action(user_id, user_name, "fuzzy_search", "empty", {"error": "no_search_term"})
+        return "Please provide a search term. Usage: /search <instance-name-or-id>"
+    
+    # Perform fuzzy search
+    matching_instances = fuzzy_search_instances(text)
+    
+    if not matching_instances:
+        _log_user_action(user_id, user_name, "fuzzy_search", text, {
+            "search_term": text,
+            "results_count": 0
+        })
+        return f"No instances found matching '{text}'"
+    
+    # Format results
+    instance_states = []
+    instance_details = []
+    
+    for instance in matching_instances:
+        instance_id = instance['InstanceId']
+        instance_name = instance.get('Name')
+        state = instance['State']
+        
+        instance_detail = {
+            "instance_id": instance_id,
+            "instance_name": instance_name,
+            "state": state
+        }
+        instance_details.append(instance_detail)
+        
+        if instance_name:
+            instance_states.append(f"`{instance_name}` ({instance_id}) - {state}")
+        else:
+            instance_states.append(f"`{instance_id}` - {state}")
+    
+    # Log the search action
+    _log_user_action(user_id, user_name, "fuzzy_search", text, {
+        "search_term": text,
+        "results_count": len(matching_instances),
+        "instances": instance_details
+    })
+    
+    response = f"Found {len(matching_instances)} instance(s) matching '{text}':\n"
+    response += "\n".join(f"• {instance}" for instance in instance_states)
+    
+    return response

@@ -87,4 +87,37 @@ def test_ec2_schedule_endpoint_with_params(client):
         })
         
         assert response.status_code == 200
-        assert "Instance `invalid-instance` not found" in response.get_data(as_text=True) 
+        assert "Instance `invalid-instance` not found" in response.get_data(as_text=True)
+
+def test_search_endpoint_with_params(client):
+    """Test search endpoint with valid parameters"""
+    with patch('src.handlers.fuzzy_search_instances') as mock_search:
+        mock_search.return_value = [
+            {
+                'InstanceId': 'i-1234567890abcdef0',
+                'Name': 'test-instance',
+                'State': 'running'
+            }
+        ]
+        
+        response = client.post('/search', data={
+            'user_id': 'U08QYU6AX0V',
+            'user_name': 'testuser',
+            'text': 'test'
+        })
+        
+        assert response.status_code == 200
+        response_text = response.get_data(as_text=True)
+        assert "Found 1 instance(s) matching 'test':" in response_text
+        assert "test-instance" in response_text
+
+def test_search_endpoint_empty_term(client):
+    """Test search endpoint with empty search term"""
+    response = client.post('/search', data={
+        'user_id': 'U08QYU6AX0V',
+        'user_name': 'testuser',
+        'text': ''
+    })
+    
+    assert response.status_code == 200
+    assert "Please provide a search term" in response.get_data(as_text=True) 

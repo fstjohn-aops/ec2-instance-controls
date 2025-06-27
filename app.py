@@ -7,7 +7,7 @@ from flask import Flask, request
 import logging
 import json
 from datetime import datetime, timezone
-from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_fuzzy_search
 import os
 
 app = Flask(__name__)
@@ -96,6 +96,10 @@ def health():
 @app.route('/instances', methods=['POST'])
 def list_instances():
     return handle_list_instances(request)
+
+@app.route('/search', methods=['POST'])
+def fuzzy_search():
+    return handle_fuzzy_search(request)
 
 @app.route('/ec2/power', methods=['POST'])
 def set_ec2_power():

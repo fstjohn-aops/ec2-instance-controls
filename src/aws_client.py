@@ -222,3 +222,94 @@ def resolve_instance_identifier(identifier):
     else:
         logger.warning(f"No instance found with name: {identifier}")
         return None
+
+def fuzzy_search_instances(search_term):
+    """Search for EC2 instances by name or ID using fuzzy matching"""
+    try:
+        logger.info(f"Performing fuzzy search for: {search_term}")
+        
+        # Get all instances first
+        response = _get_ec2_client().describe_instances(
+            Filters=[
+                {
+                    'Name': 'instance-state-name',
+                    'Values': ['pending', 'running', 'stopping', 'stopped']
+                }
+            ]
+        )
+        
+        instances = []
+        for reservation in response['Reservations']:
+            for instance in reservation['Instances']:
+                instances.append(instance)
+        
+        # Perform fuzzy matching
+        matching_instances = []
+        search_term_lower = search_term.lower()
+        
+        for instance in instances:
+            instance_id = instance['InstanceId']
+            instance_name = None
+            
+            # Get instance name from tags
+            if 'Tags' in instance:
+                for tag in instance['Tags']:
+                    if tag['Key'] == 'Name':
+                        instance_name = tag['Value']
+                        break
+            
+            # Check if search term matches instance ID (exact or partial)
+            if search_term_lower in instance_id.lower():
+                matching_instances.append({
+                    'InstanceId': instance_id,
+                    'Name': instance_name,
+                    'State': instance['State']['Name']
+                })
+                continue
+            
+            # Check if search term matches instance name (exact or partial)
+            if instance_name and search_term_lower in instance_name.lower():
+                matching_instances.append({
+                    'InstanceId': instance_id,
+                    'Name': instance_name,
+                    'State': instance['State']['Name']
+                })
+                continue
+        
+        # Sort results: exact matches first, then by name, then by ID
+        def sort_key(instance):
+            instance_id = instance['InstanceId'].lower()
+            instance_name = (instance['Name'] or '').lower()
+            
+            # Exact matches get highest priority
+            if search_term_lower == instance_id or search_term_lower == instance_name:
+                return (0, instance_name, instance_id)
+            
+            # Starts with search term gets second priority
+            if instance_id.startswith(search_term_lower) or instance_name.startswith(search_term_lower):
+                return (1, instance_name, instance_id)
+            
+            # Contains search term gets third priority
+            return (2, instance_name, instance_id)
+        
+        matching_instances.sort(key=sort_key)
+        
+        # Limit results to prevent overwhelming responses
+        max_results = 10
+        if len(matching_instances) > max_results:
+            matching_instances = matching_instances[:max_results]
+            logger.info(f"Limited results to {max_results} instances")
+        
+        logger.info(f"Found {len(matching_instances)} instances matching '{search_term}'")
+        _log_aws_operation("fuzzy_search_instances", search_term, {
+            "search_term": search_term,
+            "results_count": len(matching_instances),
+            "instance_ids": [i['InstanceId'] for i in matching_instances]
+        })
+        
+        return matching_instances
+        
+    except Exception as e:
+        logger.error(f"AWS Error performing fuzzy search for '{search_term}': {e}")
+        _log_aws_operation("fuzzy_search_instances", search_term, {"error": str(e)}, False, e)
+        return []
