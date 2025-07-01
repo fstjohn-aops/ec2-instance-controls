@@ -357,6 +357,49 @@ def test_ec2_schedule_set_invalid_stop_time():
         result = handle_ec2_schedule(request)
         assert "Invalid stop time" in result
 
+def test_ec2_schedule_set_invalid_order():
+    """Test setting schedule with end time before start time (cross-midnight)"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+         patch('src.handlers.get_instance_name') as mock_get_name:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        mock_get_name.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 5am to 4am'}
+        
+        result = handle_ec2_schedule(request)
+        # This should be rejected as cross-midnight schedules are not supported
+        assert "Invalid schedule: start time (5am) must be before end time (4am)" in result
+        assert "Cross-midnight schedules are not supported" in result
+
+def test_ec2_schedule_set_same_time():
+    """Test setting schedule with same start and end time"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+         patch('src.handlers.get_instance_name') as mock_get_name:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        mock_get_name.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 9am'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Invalid schedule: start time (9am) must be before end time (9am)" in result
+        assert "Cross-midnight schedules are not supported" in result
+
+def test_ec2_schedule_set_across_midnight():
+    """Test setting schedule that spans midnight (should be rejected)"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+         patch('src.handlers.get_instance_name') as mock_get_name:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        mock_get_name.return_value = 'i-0df9c53001c5c837d'
+        
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 11pm to 7am'}
+        
+        result = handle_ec2_schedule(request)
+        assert "Invalid schedule: start time (11pm) must be before end time (7am)" in result
+        assert "Cross-midnight schedules are not supported" in result
+
 def test_ec2_schedule_set_failed():
     """Test setting schedule when it fails"""
     with app.app_context():
@@ -589,7 +632,7 @@ def test_ec2_schedule_complex_time_formats():
                 result_text = result.json['text'] if hasattr(result, 'json') else str(result)
                 # Should either succeed or give a clear error message
                 assert any(msg in result_text for msg in [
-                    "Schedule set for", "Invalid start time", "Invalid stop time", "Usage:"
+                    "Schedule set for", "Invalid start time", "Invalid stop time", "Invalid schedule: start time", "Usage:"
                 ])
 
 # Time parsing tests
@@ -633,6 +676,60 @@ def test_parse_time_invalid():
     """Test parsing invalid time"""
     result = parse_time('invalid')
     assert result is None
+
+def test_parse_time_empty():
+    """Test parsing empty time string"""
+    result = parse_time('')
+    assert result is None
+
+def test_parse_time_whitespace():
+    """Test parsing whitespace-only time string"""
+    result = parse_time('   ')
+    assert result is None
+
+def test_parse_time_none():
+    """Test parsing None time"""
+    result = parse_time(None)
+    assert result is None
+
+def test_parse_time_invalid_hour():
+    """Test parsing time with invalid hour"""
+    result = parse_time('25:00')
+    assert result is None
+
+def test_parse_time_invalid_minute():
+    """Test parsing time with invalid minute"""
+    result = parse_time('9:60am')
+    assert result is None
+
+def test_parse_time_mixed_format():
+    """Test parsing time with mixed 24-hour and AM/PM format"""
+    result = parse_time('13:00am')
+    assert result is None
+
+def test_parse_time_12am():
+    """Test parsing 12am (midnight)"""
+    result = parse_time('12am')
+    assert result.hour == 0
+    assert result.minute == 0
+
+def test_parse_time_12pm():
+    """Test parsing 12pm (noon)"""
+    result = parse_time('12pm')
+    assert result.hour == 12
+    assert result.minute == 0
+
+def test_parse_time_12_30am():
+    """Test parsing 12:30am (midnight + 30 minutes)"""
+    result = parse_time('12:30am')
+    assert result.hour == 0
+    assert result.minute == 30
+
+def test_parse_time_12_30pm():
+    """Test parsing 12:30pm (noon + 30 minutes)"""
+    result = parse_time('12:30pm')
+    assert result.hour == 12
+    assert result.minute == 30
 
 # Schedule display tests
 def test_format_schedule_display_no_schedule():

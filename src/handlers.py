@@ -352,6 +352,19 @@ def handle_ec2_schedule(request):
             }, False)
             return f"Invalid stop time: {stop_time_str}"
         
+        # Validate that start time is before end time (same-day schedules only)
+        # Cross-midnight schedules are not supported due to scheduling logic complexity
+        if start_time >= stop_time:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "invalid_schedule_order",
+                "start_time": start_time_str,
+                "stop_time": stop_time_str,
+                "start_time_parsed": str(start_time),
+                "stop_time_parsed": str(stop_time),
+                "note": "cross_midnight_or_same_time"
+            }, False)
+            return f"Invalid schedule: start time ({start_time_str}) must be before end time ({stop_time_str}). Cross-midnight schedules are not supported."
+        
         # Get instance name for display if available
         instance_name = get_instance_name(instance_id)
         display_name = instance_name if instance_name else instance_id

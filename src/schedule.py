@@ -28,6 +28,12 @@ def _log_schedule_operation(operation, instance_id, details=None, success=True, 
 def parse_time(time_str):
     """Parse time string to time object, supporting various formats"""
     try:
+        # Handle None or empty input
+        if not time_str or not time_str.strip():
+            logger.error(f"Empty or None time string provided")
+            _log_schedule_operation("parse_time", "time", {"time_str": time_str, "error": "empty_input"}, False)
+            return None
+        
         # Normalize the input
         time_str = time_str.strip().lower()
         
@@ -40,8 +46,21 @@ def parse_time(time_str):
         
         # Parse using dateutil
         parsed = parser.parse(time_str)
-        logger.info(f"Successfully parsed time '{time_str}' to {parsed.time()}")
-        return parsed.time()
+        
+        # Validate the parsed time is reasonable
+        time_obj = parsed.time()
+        if time_obj.hour > 23 or time_obj.minute > 59:
+            logger.error(f"Invalid time values: hour={time_obj.hour}, minute={time_obj.minute}")
+            _log_schedule_operation("parse_time", "time", {
+                "time_str": time_str, 
+                "error": "invalid_time_values",
+                "hour": time_obj.hour,
+                "minute": time_obj.minute
+            }, False)
+            return None
+        
+        logger.info(f"Successfully parsed time '{time_str}' to {time_obj}")
+        return time_obj
     except Exception as e:
         logger.error(f"Error parsing time '{time_str}': {e}")
         _log_schedule_operation("parse_time", "time", {"time_str": time_str, "error": str(e)}, False)
