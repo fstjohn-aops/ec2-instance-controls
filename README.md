@@ -1,170 +1,254 @@
 # EC2 Instance Controls - Slack Bot
 
-A Kubernetes-native Slack bot for managing EC2 instances through Slack commands. Designed to run on Amazon EKS with IAM roles for service accounts.
+A Kubernetes-native Slack bot for managing EC2 instances through Slack commands. Designed to run on Amazon EKS with IAM roles for service accounts (IRSA) and EKS Pod Identity.
 
 ## Features
 
-- **Slack Integration**: Control EC2 instances directly from Slack
-- **EC2 Power Management**: Start, stop, and check status of EC2 instances
-- **Instance Scheduling**: Schedule automatic start/stop of instances
-- **Audit Logging**: Comprehensive logging of all operations
-- **Kubernetes Native**: Designed for EKS with IAM roles for service accounts
+- **Slack Integration**: Control EC2 instances directly from Slack using slash commands
+- **EC2 Power Management**: Start, stop, and restart EC2 instances
+- **Instance Scheduling**: Schedule automatic start/stop of instances using EC2 tags
+- **Fuzzy Search**: Search instances by name or ID with intelligent matching
+- **Comprehensive Auditing**: Structured JSON logging of all operations with user context
+- **Security-First**: Uses EKS Pod Identity for AWS authentication, no hardcoded credentials
+- **Instance Control Validation**: Only controls instances with `EC2ControlsEnabled` tag set to truthy value
 
 ## Architecture
 
-- **Flask Application**: HTTP API server with Slack integration
-- **AWS SDK**: EC2 operations using IAM roles
-- **Persistent Storage**: Schedules stored in EBS volumes
-- **IAM Authentication**: Uses EKS service accounts for AWS access
-- **Slack Events API**: Handles Slack commands and interactions
+- **Flask Application**: HTTP API server handling Slack Events API
+- **AWS SDK (boto3)**: EC2 operations using IAM roles via EKS Pod Identity
+- **Persistent Scheduling**: Schedules stored as EC2 tags (`PowerScheduleOnTime`, `PowerScheduleOffTime`)
+- **Structured Logging**: JSON-formatted logs with audit trail for all operations
+- **Containerized**: Docker container with non-root user and security hardening
 
 ## Prerequisites
 
-- Amazon EKS cluster with IAM roles configured
+- Amazon EKS cluster with EKS Pod Identity configured
 - kubectl configured for your cluster
 - Podman installed locally (for building images)
 - Access to container registry (cr.aops.tools)
+- Slack app configured with Events API
 
 ## Quick Start
 
-### 1. Build and Deploy
-
-Build the container image and deploy to your cluster:
+### 1. Deploy to Kubernetes
 
 ```bash
-# Build and push image to registry
-./push-image.sh v1.0.0
-
-# Deploy to Kubernetes
+# Deploy all Kubernetes resources
 kubectl apply -f k8s/
+
+# Verify deployment
+kubectl get pods -n ec2-slack-bot
+kubectl get svc -n ec2-slack-bot
+kubectl get ingress -n ec2-slack-bot
+```
+
+### 2. Build and Update Application
+
+```bash
+# Build and push new image version
+./push-image.sh v1.0.0
 
 # Update deployment with new image
 ./k8s/update-deployment.sh v1.0.0
 ```
 
-### 2. Alternative: Deploy Individual Components
+## API Endpoints
 
-```bash
-# Deploy everything
-kubectl apply -f k8s/
+The application exposes the following endpoints for Slack integration:
 
-# Or deploy individual components
-kubectl apply -f k8s/00-namespace.yml
-kubectl apply -f k8s/04-configmap.yml
-kubectl apply -f k8s/01-deployment.yml
-kubectl apply -f k8s/02-service.yml
-kubectl apply -f k8s/03-ingress.yml
+- `GET /health` - Health check endpoint
+- `POST /instances` - List all controllable instances in the AWS region
+- `POST /search` - Fuzzy search for instances by name or ID
+- `POST /ec2/power` - Control instance power state (start/stop/restart)
+- `POST /ec2-power-state` - Alias for power control endpoint
+- `POST /ec2-schedule` - Manage instance schedules
+
+## Slack Commands
+
+### List Instances
 ```
-
-## Build and Deployment
-
-### Building Images
-
-The project includes scripts for building and deploying container images:
-
-```bash
-# Build image for x86_64 (EKS compatibility)
-./build-image.sh v1.0.0
-
-# Build and push to registry
-./push-image.sh v1.0.0
+/instances
 ```
+Lists all EC2 instances that can be controlled by the bot (have `EC2ControlsEnabled` tag).
 
-### Container Registry
+### Search Instances
+```
+/search <instance-name-or-id>
+```
+Performs fuzzy search for instances by name or ID. Supports partial matches and intelligent sorting.
 
-Images are built and pushed to: `cr.aops.tools/aops-docker-repo/ec2-instance-controls`
+### Power Control
+```
+/ec2-power <instance-id|instance-name> [on|off|restart]
+```
+- `i-1234567890abcdef0` - Check current state
+- `i-1234567890abcdef0 on` - Start instance
+- `i-1234567890abcdef0 off` - Stop instance
+- `i-1234567890abcdef0 restart` - Restart instance
+- `my-instance-name on` - Use instance name instead of ID
 
-### Deployment Workflow
+### Instance Scheduling
+```
+/ec2-schedule <instance-id|instance-name> [<start_time> to <stop_time>|clear]
+```
+- `i-1234567890abcdef0` - Check current schedule
+- `i-1234567890abcdef0 9:00am to 5:00pm` - Set daily schedule
+- `i-1234567890abcdef0 clear` - Remove schedule
 
-1. **Build**: `./build-image.sh <tag>` - Builds x86_64 image locally
-2. **Push**: `./push-image.sh <tag>` - Builds and pushes to registry
-3. **Deploy**: `./k8s/update-deployment.sh <tag>` - Updates Kubernetes deployment
+**Time Format Support:**
+- `9:00am`, `9am`, `09:00`, `9:00 AM`
+- `5:00pm`, `5pm`, `17:00`, `5:00 PM`
+
+## Security Model
+
+### Instance Control Authorization
+Only instances with the `EC2ControlsEnabled` tag set to a truthy value can be controlled. This provides fine-grained control over which instances the bot can manage.
+
+### AWS Authentication
+- Uses EKS Pod Identity for AWS authentication
+- No hardcoded credentials or access keys
+- IAM permissions scoped to EC2 operations only
+- Service account: `ec2-instance-controls` in namespace `ec2-slack-bot`
+
+### Network Security
+- Ingress configured with TLS encryption
+- IP whitelist capability (currently commented out)
+- Non-root container execution
+- Security context hardening
 
 ## Configuration
 
-### Environment Variables
+### Environment Variables (ConfigMap)
 
-The application uses these environment variables (configured via ConfigMap):
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AWS_REGION` | `us-west-2` | AWS region for EC2 operations |
+| `LOG_LEVEL` | `INFO` | Application logging level |
+| `PORT` | `8000` | Application port |
+| `TEST_MODE` | `false` | Test mode flag |
 
-- `AWS_REGION`: AWS region for EC2 operations
-- `LOG_LEVEL`: Logging level (INFO, DEBUG, etc.)
-- `PORT`: Application port (default: 8000)
+### AWS IAM Permissions
 
-## API Endpoints
+The service requires the following IAM permissions:
+- `ec2:*` - Full EC2 access for instance management
+- `kms:*` - KMS access for encrypted resources
+- `iam:PassRole` - For passing IAM roles to EC2 instances
 
-- `GET /health` - Health check
-- `POST /slack/events` - Slack Events API endpoint
-- `POST /instances` - List all instances in the AWS region
-- `POST /search` - Fuzzy search for instances by name or ID
-- `POST /ec2/power` - Control instance power state
-- `POST /ec2-schedule` - Manage instance schedules
+## Deployment
 
-## Updating the Application
+### Kubernetes Resources
 
-### Update Image Version
+The deployment creates:
+
+- **Namespace**: `ec2-slack-bot` - Isolated namespace
+- **ServiceAccount**: `ec2-instance-controls` - For AWS authentication
+- **Deployment**: `ec2-slack-bot` - Main application with 1 replica
+- **Service**: `ec2-slack-bot` - Internal service (port 80)
+- **Ingress**: `ec2-slack-bot` - External access with TLS
+- **ConfigMap**: `ec2-slack-bot-config` - Application configuration
+
+### Container Image
+
+- **Registry**: `cr.aops.tools/aops-docker-repo/ec2-instance-controls`
+- **Base Image**: `python:3.11-slim`
+- **Web Server**: Gunicorn with 1 worker
+- **Health Check**: HTTP GET `/health` endpoint
+
+### Build and Deploy Workflow
+
 ```bash
-# Build and push new version
-./push-image.sh v1.2.3
+# 1. Build image for x86_64 (EKS compatibility)
+./build-image.sh v1.0.0
 
-# Update deployment
-./k8s/update-deployment.sh v1.2.3
+# 2. Build and push to registry
+./push-image.sh v1.0.0
+
+# 3. Update deployment
+./k8s/update-deployment.sh v1.0.0
 ```
 
-### Full Redeployment
-```bash
-# Remove and reapply all resources
-kubectl delete -f k8s/
-kubectl apply -f k8s/
-```
+## Monitoring and Logging
 
-## Monitoring
+### Structured Logging
+All operations are logged in JSON format with audit information:
+- User actions (AUDIT)
+- AWS operations (AWS_AUDIT)
+- Schedule operations (SCHEDULE_AUDIT)
+- Request tracking (REQUEST_AUDIT)
 
-### View Logs
+### Health Monitoring
 ```bash
+# Check application health
+curl https://ec2-slack-bot.notaops.com/health
+
+# View application logs
 kubectl logs -f deployment/ec2-slack-bot -n ec2-slack-bot
-```
 
-### Check Pod Status
-```bash
+# Check pod status
 kubectl get pods -n ec2-slack-bot
+
+# Monitor deployment
+kubectl rollout status deployment/ec2-slack-bot -n ec2-slack-bot
 ```
 
-### Port Forward for Testing
+### Port Forward for Local Testing
 ```bash
 kubectl port-forward service/ec2-slack-bot 8000:80 -n ec2-slack-bot
 ```
 
-### Check Service Status
+## Development
+
+### Local Development Setup
 ```bash
-kubectl get svc -n ec2-slack-bot
-kubectl get ingress -n ec2-slack-bot
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run tests
+./test.sh
+
+# Run application locally
+python app.py
 ```
 
-## Kubernetes Resources
+### Testing
+The project includes comprehensive tests:
+- Unit tests for all endpoints
+- Mocked AWS operations
+- Integration tests for handlers
 
-The deployment creates several Kubernetes resources:
+Run tests with:
+```bash
+./test.sh
+```
 
-- **Namespace**: `ec2-slack-bot` - Isolated namespace for the Slack bot
-- **Deployment**: `ec2-slack-bot` - Main application deployment
-- **Service**: `ec2-slack-bot` - Internal service for the deployment
-- **Ingress**: `ec2-slack-bot` - External access with TLS and IP whitelist
-- **ConfigMap**: `ec2-slack-bot-config` - Application configuration
-
-## Security
-
-- **IAM Roles**: Uses EKS service accounts for AWS authentication
-- **No Hardcoded Credentials**: All AWS access through IAM roles
-- **Audit Logging**: All operations logged with user context
-- **IP Whitelist**: Ingress restricted to office IP addresses
-- **TLS Encryption**: HTTPS with Let's Encrypt certificates
+### Dependencies
+- **Flask 3.0.0** - Web framework
+- **boto3 1.34.0** - AWS SDK
+- **python-dateutil 2.8.2** - Date/time parsing
+- **gunicorn 21.2.0** - WSGI server
+- **pytest 7.4.3** - Testing framework
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **IAM Role Not Working**: Ensure OIDC provider is configured and service account has correct annotations
-2. **Image Pull Errors**: Check registry credentials and image path
-3. **Pod Startup Failures**: Check logs for configuration issues
+1. **Instance Not Found**
+   - Verify instance exists in the configured AWS region
+   - Check that instance has `EC2ControlsEnabled` tag set to truthy value
+
+2. **Permission Denied**
+   - Verify EKS Pod Identity is configured correctly
+   - Check service account has proper IAM role association
+   - Ensure IAM role has required EC2 permissions
+
+3. **Image Pull Errors**
+   - Verify registry credentials are configured
+   - Check image tag exists in registry
+   - Ensure cluster can access the container registry
 
 ### Debug Commands
 
@@ -172,19 +256,38 @@ The deployment creates several Kubernetes resources:
 # Check pod events
 kubectl describe pod -l app=ec2-slack-bot -n ec2-slack-bot
 
-# Check AWS credentials in pod
+# Verify AWS credentials in pod
 kubectl exec -it deployment/ec2-slack-bot -n ec2-slack-bot -- env | grep AWS
 
 # Check ingress status
 kubectl describe ingress ec2-slack-bot -n ec2-slack-bot
+
+# View recent logs
+kubectl logs --tail=100 deployment/ec2-slack-bot -n ec2-slack-bot
 ```
 
 ### Health Checks
 
 ```bash
 # Test health endpoint
-curl https://ec2-slack-bot.aops.ninja/health
+curl https://ec2-slack-bot.notaops.com/health
 
 # Check application logs
 kubectl logs -f deployment/ec2-slack-bot -n ec2-slack-bot
+
+# Verify service endpoints
+kubectl get endpoints -n ec2-slack-bot
 ```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new functionality
+5. Run the test suite
+6. Submit a pull request
+
+## License
+
+This project is proprietary and confidential.
