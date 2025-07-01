@@ -136,6 +136,28 @@ def test_ec2_power_stop_instance():
             assert "Set `test-instance`" in result.json['text']
             assert "to off" in result.json['text']
 
+def test_ec2_power_restart_instance():
+    """Test EC2 power restart instance"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.restart_instance') as mock_restart, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'running'
+            mock_restart.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d restart'}
+            
+            result = handle_ec2_power(request)
+            assert "Set `test-instance`" in result.json['text']
+            assert "to restart" in result.json['text']
+
 def test_ec2_power_access_denied():
     """Test EC2 power access denied for unauthorized user - now any authenticated user can access"""
     with app.app_context():
@@ -211,7 +233,7 @@ def test_ec2_power_invalid_state():
         request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d maybe'}
         
         result = handle_ec2_power(request)
-        assert "must be 'on' or 'off'" in result
+        assert "must be 'on', 'off', or 'restart'" in result
 
 def test_ec2_power_usage_message():
     """Test EC2 power with too many arguments"""

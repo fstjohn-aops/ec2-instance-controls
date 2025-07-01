@@ -93,7 +93,9 @@ def start_instance(instance_id):
     
     try:
         response = _get_ec2_client().start_instances(InstanceIds=[instance_id])
-        logger.info(f"AWS: Started {instance_id}")
+        instance_name = get_instance_name(instance_id)
+        display_name = f"{instance_name} ({instance_id})" if instance_name else f"unnamed ({instance_id})"
+        logger.info(f"AWS: Started {display_name}")
         _log_aws_operation("start_instances", instance_id, {
             "previous_state": response['StartingInstances'][0]['PreviousState']['Name'],
             "current_state": response['StartingInstances'][0]['CurrentState']['Name']
@@ -114,7 +116,9 @@ def stop_instance(instance_id):
     
     try:
         response = _get_ec2_client().stop_instances(InstanceIds=[instance_id])
-        logger.info(f"AWS: Stopped {instance_id}")
+        instance_name = get_instance_name(instance_id)
+        display_name = f"{instance_name} ({instance_id})" if instance_name else f"unnamed ({instance_id})"
+        logger.info(f"AWS: Stopped {display_name}")
         _log_aws_operation("stop_instances", instance_id, {
             "previous_state": response['StoppingInstances'][0]['PreviousState']['Name'],
             "current_state": response['StoppingInstances'][0]['CurrentState']['Name']
@@ -123,6 +127,28 @@ def stop_instance(instance_id):
     except Exception as e:
         logger.error(f"AWS Error stopping instance: {e}")
         _log_aws_operation("stop_instances", instance_id, {"error": str(e)}, False, e)
+        return False
+
+def restart_instance(instance_id):
+    """Restart an EC2 instance"""
+    # Check if instance can be controlled before restarting
+    if not can_control_instance_by_id(instance_id):
+        logger.error(f"Cannot restart instance {instance_id}: not authorized to control this instance")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "instance_not_controllable"}, False)
+        return False
+    
+    try:
+        response = _get_ec2_client().reboot_instances(InstanceIds=[instance_id])
+        instance_name = get_instance_name(instance_id)
+        display_name = f"{instance_name} ({instance_id})" if instance_name else f"unnamed ({instance_id})"
+        logger.info(f"AWS: Restarted {display_name}")
+        _log_aws_operation("reboot_instances", instance_id, {
+            "operation": "reboot_requested"
+        })
+        return True
+    except Exception as e:
+        logger.error(f"AWS Error restarting instance: {e}")
+        _log_aws_operation("reboot_instances", instance_id, {"error": str(e)}, False, e)
         return False
 
 def get_instance_by_name(instance_name):

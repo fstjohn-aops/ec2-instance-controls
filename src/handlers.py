@@ -3,7 +3,7 @@ import re
 import json
 from datetime import datetime, timezone
 from flask import jsonify
-from src.aws_client import get_instance_state, start_instance, stop_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id
+from src.aws_client import get_instance_state, start_instance, stop_instance, restart_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id
 from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 import os
@@ -90,12 +90,12 @@ def handle_ec2_power(request):
             }, False)
             return f"Instance `{instance_identifier}` not found"
         
-        if power_state not in ['on', 'off']:
+        if power_state not in ['on', 'off', 'restart']:
             _log_user_action(user_id, user_name, "ec2_power_change", instance_id, {
                 "power_state": power_state,
                 "error": "invalid_power_state"
             }, False)
-            return "Power state must be 'on' or 'off'."
+            return "Power state must be 'on', 'off', or 'restart'."
         
         # Check if instance can be controlled by this service
         if not can_control_instance_by_id(instance_id):
@@ -134,8 +134,10 @@ def handle_ec2_power(request):
             # Change the state
             if power_state == 'on':
                 success = start_instance(instance_id)
-            else:
+            elif power_state == 'off':
                 success = stop_instance(instance_id)
+            elif power_state == 'restart':
+                success = restart_instance(instance_id)
             
             # Log the AWS operation result
             _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {
@@ -153,7 +155,7 @@ def handle_ec2_power(request):
     
     else:
         _log_user_action(user_id, user_name, "ec2_power", "invalid", {"error": "invalid_format", "text": text}, False)
-        return "Usage: <instance-id|instance-name> [on|off]"
+        return "Usage: <instance-id|instance-name> [on|off|restart]"
 
 def handle_list_instances(request):
     """Handle the list instances endpoint - returns all instances in the AWS region that can be controlled by this service"""
