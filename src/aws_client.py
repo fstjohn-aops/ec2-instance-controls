@@ -501,3 +501,77 @@ def delete_power_schedule_tags(instance_id):
             "error": str(e)
         }, False, e)
         return False
+
+def get_disable_schedule_tag(instance_id):
+    """Get disable schedule tag for an EC2 instance"""
+    tags = get_instance_tags(instance_id)
+    
+    for tag in tags:
+        if tag['Key'] == 'PowerScheduleDisabledUntil':
+            _log_aws_operation("get_disable_schedule_tag", instance_id, {
+                "disable_schedule_tag_found": tag['Value']
+            })
+            return tag['Value']
+    
+    _log_aws_operation("get_disable_schedule_tag", instance_id, {
+        "disable_schedule_tag_found": False
+    })
+    return None
+
+def set_disable_schedule_tag(instance_id, disable_until=None):
+    """Set disable schedule tag for an EC2 instance"""
+    try:
+        tags_to_set = []
+        
+        if disable_until is not None:
+            tags_to_set.append({
+                'Key': 'PowerScheduleDisabledUntil',
+                'Value': disable_until
+            })
+        
+        if not tags_to_set:
+            logger.warning(f"No tags to set for instance {instance_id}")
+            return False
+        
+        response = _get_ec2_client().create_tags(
+            Resources=[instance_id],
+            Tags=tags_to_set
+        )
+        
+        logger.info(f"Successfully set disable schedule tag for {instance_id}: {tags_to_set}")
+        _log_aws_operation("set_disable_schedule_tag", instance_id, {
+            "tags_set": [tag['Key'] for tag in tags_to_set],
+            "disable_until": disable_until
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error setting disable schedule tag for {instance_id}: {e}")
+        _log_aws_operation("set_disable_schedule_tag", instance_id, {
+            "error": str(e),
+            "disable_until": disable_until
+        }, False, e)
+        return False
+
+def delete_disable_schedule_tag(instance_id):
+    """Delete disable schedule tag for an EC2 instance"""
+    try:
+        response = _get_ec2_client().delete_tags(
+            Resources=[instance_id],
+            Tags=[
+                {'Key': 'PowerScheduleDisabledUntil'}
+            ]
+        )
+        
+        logger.info(f"Successfully deleted disable schedule tag for {instance_id}")
+        _log_aws_operation("delete_disable_schedule_tag", instance_id, {
+            "tags_deleted": ["PowerScheduleDisabledUntil"]
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error deleting disable schedule tag for {instance_id}: {e}")
+        _log_aws_operation("delete_disable_schedule_tag", instance_id, {
+            "error": str(e)
+        }, False, e)
+        return False

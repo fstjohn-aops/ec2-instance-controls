@@ -7,7 +7,7 @@ from flask import Flask, request
 import logging
 import json
 from datetime import datetime, timezone
-from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_fuzzy_search
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_ec2_disable_schedule, handle_fuzzy_search
 import os
 
 app = Flask(__name__)
@@ -121,6 +121,10 @@ def ec2_power_state():
 @app.route('/ec2-schedule', methods=['POST'])
 def ec2_schedule():
     return handle_ec2_schedule(request)
+
+@app.route('/ec2-disable-schedule', methods=['POST'])
+def ec2_disable_schedule():
+    return handle_ec2_disable_schedule(request)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)

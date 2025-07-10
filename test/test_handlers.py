@@ -1,8 +1,9 @@
 import pytest
 from unittest.mock import Mock, patch
 from flask import Flask
-from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_fuzzy_search
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_ec2_disable_schedule, handle_fuzzy_search
 from src.schedule import parse_time, format_schedule_display
+from src.disable_schedule import parse_hours, format_disable_schedule_display
 
 # Create a test Flask app
 app = Flask(__name__)
@@ -993,4 +994,353 @@ def test_list_instances_no_controllable():
         
         result = handle_list_instances(request)
         assert "No controllable instances found" in result
-        assert "EC2ControlsEnabled" in result 
+        assert "EC2ControlsEnabled" in result
+
+# EC2 Disable Schedule tests
+def test_ec2_disable_schedule_get_no_schedule():
+    """Test EC2 disable schedule get when no schedule is set"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_disable_schedule') as mock_get_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_disable.return_value = None
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "test-instance" in result
+            assert "No disable schedule set" in result
+
+def test_ec2_disable_schedule_get_with_schedule():
+    """Test EC2 disable schedule get when schedule is set"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_disable_schedule') as mock_get_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            from datetime import datetime, timezone, timedelta
+            # Create a datetime in the future to avoid "expired" message
+            now = datetime.now(timezone.utc)
+            disable_until = now + timedelta(hours=2, minutes=30)
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_disable.return_value = disable_until
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "test-instance" in result
+            # The exact time might vary slightly due to test execution time
+            # so we check for the general format instead of exact values
+            assert "Disabled for" in result
+            assert "h" in result
+            assert "m" in result
+
+def test_ec2_disable_schedule_set_valid():
+    """Test EC2 disable schedule set with valid hours"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.set_disable_schedule') as mock_set_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.parse_hours') as mock_parse_hours:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_set_disable.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            mock_parse_hours.return_value = 2
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Disable schedule set for `test-instance`" in result.json['text']
+            assert "for 2 hours" in result.json['text']
+
+def test_ec2_disable_schedule_set_invalid_hours():
+    """Test EC2 disable schedule set with invalid hours"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.parse_hours') as mock_parse_hours:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_parse_hours.return_value = None
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d invalid-hours'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Invalid hours format: invalid-hours" in result
+
+def test_ec2_disable_schedule_set_failed():
+    """Test EC2 disable schedule set when AWS operation fails"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.set_disable_schedule') as mock_set_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.parse_hours') as mock_parse_hours:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_set_disable.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            mock_parse_hours.return_value = 2
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Failed to set disable schedule for `test-instance`" in result
+
+def test_ec2_disable_schedule_access_denied():
+    """Test EC2 disable schedule set when instance cannot be controlled"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.parse_hours') as mock_parse_hours:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = False
+            mock_parse_hours.return_value = 2
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "test-instance" in result
+            assert "cannot be controlled by this service" in result
+            assert "EC2ControlsEnabled" in result
+
+def test_ec2_disable_schedule_instance_not_found():
+    """Test EC2 disable schedule when instance is not found"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            
+            mock_resolve.return_value = None
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'nonexistent-instance'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Instance `nonexistent-instance` not found" in result
+
+def test_ec2_disable_schedule_usage_message():
+    """Test EC2 disable schedule usage message"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': ''}
+        
+        result = handle_ec2_disable_schedule(request)
+        assert "Usage:" in result
+        assert "cancel" in result
+
+def test_ec2_disable_schedule_empty_text():
+    """Test EC2 disable schedule with empty text"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': ''}
+        
+        result = handle_ec2_disable_schedule(request)
+        assert "Usage:" in result
+
+def test_ec2_disable_schedule_missing_text():
+    """Test EC2 disable schedule with missing text"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V'}
+        
+        result = handle_ec2_disable_schedule(request)
+        assert "Usage:" in result
+
+def test_ec2_disable_schedule_cancel():
+    """Test EC2 disable schedule cancel command"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.delete_disable_schedule') as mock_delete_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_delete_disable.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+
+def test_ec2_disable_schedule_clear():
+    """Test EC2 disable schedule clear command"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.delete_disable_schedule') as mock_delete_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_delete_disable.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+
+def test_ec2_disable_schedule_cancel_failed():
+    """Test EC2 disable schedule cancel when AWS operation fails"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.delete_disable_schedule') as mock_delete_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_delete_disable.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "Failed to cancel disable schedule for `i-0df9c53001c5c837d`" in result
+
+def test_ec2_disable_schedule_cancel_not_controllable():
+    """Test EC2 disable schedule cancel when instance cannot be controlled"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = False
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
+            
+            result = handle_ec2_disable_schedule(request)
+            assert "test-instance" in result
+            assert "cannot be controlled by this service" in result
+            assert "EC2ControlsEnabled" in result
+
+def test_ec2_disable_schedule_case_insensitive_cancel():
+    """Test EC2 disable schedule cancel with different case variations"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.delete_disable_schedule') as mock_delete_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_delete_disable.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            # Test different cancel command variations
+            cancel_commands = ['CANCEL', 'Clear', 'RESET', 'Unset', 'NO', 'Remove', 'DELETE']
+            
+            for command in cancel_commands:
+                request = Mock()
+                request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {command}'}
+                
+                result = handle_ec2_disable_schedule(request)
+                assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+
+def test_ec2_disable_schedule_various_hours_formats():
+    """Test EC2 disable schedule with various hours formats"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.set_disable_schedule') as mock_set_disable, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.parse_hours') as mock_parse_hours:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_set_disable.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            # Test various hours formats
+            hours_formats = ['1h', '2h', '24h', '48h', '168h']
+            
+            for hours_str in hours_formats:
+                hours = int(hours_str[:-1])
+                mock_parse_hours.return_value = hours
+                
+                request = Mock()
+                request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {hours_str}'}
+                
+                result = handle_ec2_disable_schedule(request)
+                assert "Disable schedule set for `test-instance`" in result.json['text']
+                assert f"for {hours} hours" in result.json['text']
+
+# Disable Schedule Module tests
+def test_parse_hours_valid():
+    """Test parse_hours with valid hours string"""
+    result = parse_hours('2h')
+    assert result == 2
+
+def test_parse_hours_invalid():
+    """Test parse_hours with invalid hours string"""
+    result = parse_hours('invalid-hours')
+    assert result is None
+
+def test_parse_hours_empty():
+    """Test parse_hours with empty string"""
+    result = parse_hours('')
+    assert result is None
+
+def test_parse_hours_none():
+    """Test parse_hours with None"""
+    result = parse_hours(None)
+    assert result is None
+
+def test_parse_hours_below_minimum():
+    """Test parse_hours with value below minimum"""
+    result = parse_hours('0h')
+    assert result is None
+
+def test_parse_hours_no_h_suffix():
+    """Test parse_hours without 'h' suffix"""
+    result = parse_hours('2')
+    assert result is None
+
+def test_parse_hours_invalid_number():
+    """Test parse_hours with invalid number"""
+    result = parse_hours('ah')
+    assert result is None
+
+def test_format_disable_schedule_display_no_schedule():
+    """Test format_disable_schedule_display with no schedule"""
+    result = format_disable_schedule_display(None)
+    assert result == "No disable schedule set"
+
+def test_format_disable_schedule_display_with_schedule():
+    """Test format_disable_schedule_display with schedule"""
+    from datetime import datetime, timezone, timedelta
+    
+    # Create a datetime 2 hours in the future
+    now = datetime.now(timezone.utc)
+    disable_until = now + timedelta(hours=2, minutes=30)
+    
+    result = format_disable_schedule_display(disable_until)
+    # The exact time might vary slightly due to test execution time
+    # so we check for the general format instead of exact values
+    assert "Disabled for" in result
+    assert "h" in result
+    assert "m" in result 

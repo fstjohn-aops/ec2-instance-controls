@@ -6,6 +6,7 @@ from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, restart_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id
 from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
+from src.disable_schedule import parse_hours, get_disable_schedule, set_disable_schedule, delete_disable_schedule, format_disable_schedule_display
 import os
 
 logger = logging.getLogger(__name__)
@@ -469,3 +470,147 @@ def handle_fuzzy_search(request):
     response += "\n".join(f"• {instance}" for instance in instance_states)
     
     return response
+
+def handle_ec2_disable_schedule(request):
+    """Handle the EC2 disable schedule endpoint"""
+    user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
+    text = request.form.get('text', '').strip()
+    
+    # Parse text: "instance-id" or "instance-name" or "instance-id datetime" or "instance-id cancel"
+    parts = text.split()
+    
+    if len(parts) == 1:
+        # Just instance identifier - return current disable schedule status
+        instance_identifier = parts[0]
+        
+        # Resolve to instance ID
+        instance_id = resolve_instance_identifier(instance_identifier)
+        logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
+        if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_disable_schedule_get", instance_identifier, {"error": "instance_not_found"}, False)
+            return f"Instance `{instance_identifier}` not found"
+        
+        # Get current disable schedule
+        disable_datetime = get_disable_schedule(instance_id)
+        
+        # Get instance name for display if available
+        instance_name = get_instance_name(instance_id)
+        display_name = instance_name if instance_name else instance_id
+        
+        disable_display = format_disable_schedule_display(disable_datetime)
+        
+        _log_user_action(user_id, user_name, "ec2_disable_schedule_get", instance_id, {
+            "instance_name": instance_name,
+            "disable_datetime": disable_datetime.isoformat() if disable_datetime else None,
+            "original_identifier": instance_identifier
+        })
+        
+        return f"Disable schedule for `{display_name}` ({instance_id}): {disable_display}"
+    
+    elif len(parts) >= 2:
+        # Instance identifier and command - could be cancel command or datetime
+        instance_identifier = parts[0]
+        command_parts = parts[1:]
+        
+        # Resolve to instance ID
+        instance_id = resolve_instance_identifier(instance_identifier)
+        logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
+        if not instance_id:
+            _log_user_action(user_id, user_name, "ec2_disable_schedule_cancel", instance_identifier, {
+                "command": ' '.join(command_parts),
+                "error": "instance_not_found"
+            }, False)
+            return f"Instance `{instance_identifier}` not found"
+        
+        # Join command parts for processing
+        command = ' '.join(command_parts)
+        
+        # Check if this is a cancel command
+        cancel_commands = ['cancel', 'clear', 'reset', 'unset', 'no', 'remove', 'delete']
+        if command.lower() in cancel_commands:
+            # Check if instance can be controlled by this service
+            if not can_control_instance_by_id(instance_id):
+                instance_name = get_instance_name(instance_id)
+                display_name = instance_name if instance_name else instance_id
+                _log_user_action(user_id, user_name, "ec2_disable_schedule_cancel", instance_id, {
+                    "command": command,
+                    "error": "instance_not_controllable",
+                    "instance_name": instance_name
+                }, False)
+                return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+            
+            # Cancel the disable schedule
+            success = delete_disable_schedule(instance_id)
+            
+            # Get instance name for display if available
+            instance_name = get_instance_name(instance_id)
+            display_name = instance_name if instance_name else instance_id
+            
+            _log_user_action(user_id, user_name, "ec2_disable_schedule_cancel", instance_id, {
+                "instance_name": instance_name,
+                "command": command,
+                "original_identifier": instance_identifier,
+                "operation_success": success
+            }, success)
+            
+            if success:
+                response = jsonify({
+                    'response_type': 'ephemeral',
+                    'text': f"Disable schedule cancelled for `{display_name}` ({instance_id})"
+                })
+                return response
+            else:
+                return f"Failed to cancel disable schedule for `{instance_identifier}`"
+        else:
+            # Not a cancel command, treat as hours
+            # Parse the hours
+            hours = parse_hours(command)
+            if not hours:
+                _log_user_action(user_id, user_name, "ec2_disable_schedule_set", instance_id, {
+                    "error": "invalid_hours",
+                    "hours_str": command
+                }, False)
+                return f"Invalid hours format: {command}. Use format like '2h', '24h', etc. (minimum 1h)."
+            
+            # Check if instance can be controlled by this service
+            if not can_control_instance_by_id(instance_id):
+                instance_name = get_instance_name(instance_id)
+                display_name = instance_name if instance_name else instance_id
+                _log_user_action(user_id, user_name, "ec2_disable_schedule_set", instance_id, {
+                    "error": "instance_not_controllable",
+                    "instance_name": instance_name,
+                    "hours": hours
+                }, False)
+                return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+            
+            # Set the disable schedule
+            success = set_disable_schedule(instance_id, hours)
+            
+            # Get instance name for display if available
+            instance_name = get_instance_name(instance_id)
+            display_name = instance_name if instance_name else instance_id
+            
+            if success:
+                _log_user_action(user_id, user_name, "ec2_disable_schedule_set", instance_id, {
+                    "instance_name": instance_name,
+                    "hours": hours
+                })
+                
+                response = jsonify({
+                    'response_type': 'ephemeral',
+                    'text': f"Disable schedule set for `{display_name}` ({instance_id}) for {hours} hours"
+                })
+                return response
+            else:
+                _log_user_action(user_id, user_name, "ec2_disable_schedule_set", instance_id, {
+                    "error": "failed_to_set_disable_schedule"
+                }, False)
+                return f"Failed to set disable schedule for `{display_name}` ({instance_id})"
+    
+    else:
+        _log_user_action(user_id, user_name, "ec2_disable_schedule", "invalid", {
+            "error": "invalid_format",
+            "text": text
+        }, False)
+        return "Usage: <instance-id|instance-name> [<hours>] or <instance-id|instance-name> cancel"
