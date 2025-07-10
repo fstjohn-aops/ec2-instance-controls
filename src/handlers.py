@@ -135,17 +135,94 @@ def handle_ec2_power(request):
             # Change the state
             if power_state == 'on':
                 success = start_instance(instance_id)
+                # Check for specific error cases and provide user-friendly messages
+                if not success:
+                    if current_state == 'running':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"`{display_name}` ({instance_id}) is already running"
+                        })
+                    elif current_state == 'pending':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"`{display_name}` ({instance_id}) is already starting"
+                        })
+                    elif current_state == 'stopping':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot start `{display_name}` ({instance_id}) - instance is currently stopping"
+                        })
+                    elif current_state == 'stopped':
+                        # This should succeed, but if it doesn't, it's likely an AWS error
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Failed to start `{display_name}` ({instance_id}) - please try again"
+                        })
+                    else:
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot start `{display_name}` ({instance_id}) - instance is in an invalid state ({current_state})"
+                        })
             elif power_state == 'off':
                 success = stop_instance(instance_id)
+                # Check for specific error cases and provide user-friendly messages
+                if not success:
+                    if current_state == 'stopped':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"`{display_name}` ({instance_id}) is already stopped"
+                        })
+                    elif current_state == 'stopping':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"`{display_name}` ({instance_id}) is already stopping"
+                        })
+                    elif current_state == 'pending':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot stop `{display_name}` ({instance_id}) - instance is currently starting"
+                        })
+                    elif current_state == 'running':
+                        # This should succeed, but if it doesn't, it's likely an AWS error
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Failed to stop `{display_name}` ({instance_id}) - please try again"
+                        })
+                    else:
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot stop `{display_name}` ({instance_id}) - instance is in an invalid state ({current_state})"
+                        })
             elif power_state == 'restart':
                 success = restart_instance(instance_id)
-                # Check if restart failed due to instance being stopped
-                if not success and current_state == 'stopped':
-                    # Update the response to show user-friendly error
-                    response = jsonify({
-                        'response_type': 'ephemeral',
-                        'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is currently stopped"
-                    })
+                # Check for specific error cases and provide user-friendly messages
+                if not success:
+                    if current_state == 'stopped':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is currently stopped"
+                        })
+                    elif current_state == 'pending':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is currently starting"
+                        })
+                    elif current_state == 'stopping':
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is currently stopping"
+                        })
+                    elif current_state == 'running':
+                        # This should succeed, but if it doesn't, it's likely an AWS error
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Failed to restart `{display_name}` ({instance_id}) - please try again"
+                        })
+                    else:
+                        response = jsonify({
+                            'response_type': 'ephemeral',
+                            'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is in an invalid state ({current_state})"
+                        })
             
             # Log the AWS operation result
             _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {
@@ -158,6 +235,11 @@ def handle_ec2_power(request):
             _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {
                 "error": "instance_not_found_in_aws"
             }, False)
+            # Update response for the case where instance state couldn't be determined
+            response = jsonify({
+                'response_type': 'ephemeral',
+                'text': f"Failed to determine state of `{display_name}` ({instance_id}) - please try again"
+            })
         
         return response
     

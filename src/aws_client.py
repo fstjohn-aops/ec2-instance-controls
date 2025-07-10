@@ -13,6 +13,32 @@ aws_region = os.environ.get('AWS_REGION', 'us-east-1')
 # Initialize AWS EC2 client - defer until needed
 _ec2_client = None
 
+def _parse_aws_error_message(error_str):
+    """Parse AWS error messages to extract meaningful information for user feedback"""
+    if not error_str:
+        return "Unknown AWS error"
+    
+    # Common AWS error patterns
+    if "IncorrectInstanceState" in error_str:
+        if "not in a state from which it can be started" in error_str:
+            return "instance_cannot_start_from_current_state"
+        elif "not in a state from which it can be stopped" in error_str:
+            return "instance_cannot_stop_from_current_state"
+        else:
+            return "incorrect_instance_state"
+    elif "InvalidInstanceID" in error_str:
+        return "invalid_instance_id"
+    elif "UnauthorizedOperation" in error_str:
+        return "unauthorized_operation"
+    elif "RequestLimitExceeded" in error_str:
+        return "rate_limit_exceeded"
+    elif "InsufficientInstanceCapacity" in error_str:
+        return "insufficient_capacity"
+    elif "Unsupported" in error_str:
+        return "unsupported_operation"
+    else:
+        return "aws_error"
+
 def _get_ec2_client():
     """Get or create the EC2 client with proper region configuration"""
 
@@ -91,6 +117,31 @@ def start_instance(instance_id):
         _log_aws_operation("start_instances", instance_id, {"error": "instance_not_controllable"}, False)
         return False
     
+    # Check current state before attempting start
+    current_state = get_instance_state(instance_id)
+    if current_state is None:
+        logger.error(f"Cannot start instance {instance_id}: unable to determine current state")
+        _log_aws_operation("start_instances", instance_id, {"error": "state_unknown"}, False)
+        return False
+    
+    # Validate that instance can be started from current state
+    if current_state == 'running':
+        logger.error(f"Cannot start instance {instance_id}: instance is already running")
+        _log_aws_operation("start_instances", instance_id, {"error": "already_running", "current_state": current_state}, False)
+        return False
+    elif current_state == 'pending':
+        logger.error(f"Cannot start instance {instance_id}: instance is already starting (pending)")
+        _log_aws_operation("start_instances", instance_id, {"error": "already_starting", "current_state": current_state}, False)
+        return False
+    elif current_state == 'stopping':
+        logger.error(f"Cannot start instance {instance_id}: instance is currently stopping")
+        _log_aws_operation("start_instances", instance_id, {"error": "currently_stopping", "current_state": current_state}, False)
+        return False
+    elif current_state not in ['stopped']:
+        logger.error(f"Cannot start instance {instance_id}: instance is in invalid state '{current_state}' for starting")
+        _log_aws_operation("start_instances", instance_id, {"error": "invalid_state_for_start", "current_state": current_state}, False)
+        return False
+    
     try:
         response = _get_ec2_client().start_instances(InstanceIds=[instance_id])
         instance_name = get_instance_name(instance_id)
@@ -102,8 +153,12 @@ def start_instance(instance_id):
         })
         return True
     except Exception as e:
+        error_type = _parse_aws_error_message(str(e))
         logger.error(f"AWS Error starting instance: {e}")
-        _log_aws_operation("start_instances", instance_id, {"error": str(e)}, False, e)
+        _log_aws_operation("start_instances", instance_id, {
+            "error": str(e),
+            "error_type": error_type
+        }, False, e)
         return False
 
 def stop_instance(instance_id):
@@ -112,6 +167,31 @@ def stop_instance(instance_id):
     if not can_control_instance_by_id(instance_id):
         logger.error(f"Cannot stop instance {instance_id}: not authorized to control this instance")
         _log_aws_operation("stop_instances", instance_id, {"error": "instance_not_controllable"}, False)
+        return False
+    
+    # Check current state before attempting stop
+    current_state = get_instance_state(instance_id)
+    if current_state is None:
+        logger.error(f"Cannot stop instance {instance_id}: unable to determine current state")
+        _log_aws_operation("stop_instances", instance_id, {"error": "state_unknown"}, False)
+        return False
+    
+    # Validate that instance can be stopped from current state
+    if current_state == 'stopped':
+        logger.error(f"Cannot stop instance {instance_id}: instance is already stopped")
+        _log_aws_operation("stop_instances", instance_id, {"error": "already_stopped", "current_state": current_state}, False)
+        return False
+    elif current_state == 'stopping':
+        logger.error(f"Cannot stop instance {instance_id}: instance is already stopping")
+        _log_aws_operation("stop_instances", instance_id, {"error": "already_stopping", "current_state": current_state}, False)
+        return False
+    elif current_state == 'pending':
+        logger.error(f"Cannot stop instance {instance_id}: instance is currently starting (pending)")
+        _log_aws_operation("stop_instances", instance_id, {"error": "currently_starting", "current_state": current_state}, False)
+        return False
+    elif current_state not in ['running']:
+        logger.error(f"Cannot stop instance {instance_id}: instance is in invalid state '{current_state}' for stopping")
+        _log_aws_operation("stop_instances", instance_id, {"error": "invalid_state_for_stop", "current_state": current_state}, False)
         return False
     
     try:
@@ -125,8 +205,12 @@ def stop_instance(instance_id):
         })
         return True
     except Exception as e:
+        error_type = _parse_aws_error_message(str(e))
         logger.error(f"AWS Error stopping instance: {e}")
-        _log_aws_operation("stop_instances", instance_id, {"error": str(e)}, False, e)
+        _log_aws_operation("stop_instances", instance_id, {
+            "error": str(e),
+            "error_type": error_type
+        }, False, e)
         return False
 
 def restart_instance(instance_id):
@@ -139,9 +223,27 @@ def restart_instance(instance_id):
     
     # Check current state before attempting restart
     current_state = get_instance_state(instance_id)
+    if current_state is None:
+        logger.error(f"Cannot restart instance {instance_id}: unable to determine current state")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "state_unknown"}, False)
+        return False
+    
+    # Validate that instance can be restarted from current state
     if current_state == 'stopped':
         logger.error(f"Cannot restart instance {instance_id}: instance is currently stopped")
         _log_aws_operation("reboot_instances", instance_id, {"error": "instance_stopped", "current_state": current_state}, False)
+        return False
+    elif current_state == 'pending':
+        logger.error(f"Cannot restart instance {instance_id}: instance is currently starting (pending)")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "currently_starting", "current_state": current_state}, False)
+        return False
+    elif current_state == 'stopping':
+        logger.error(f"Cannot restart instance {instance_id}: instance is currently stopping")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "currently_stopping", "current_state": current_state}, False)
+        return False
+    elif current_state not in ['running']:
+        logger.error(f"Cannot restart instance {instance_id}: instance is in invalid state '{current_state}' for restarting")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "invalid_state_for_restart", "current_state": current_state}, False)
         return False
     
     try:
@@ -154,8 +256,12 @@ def restart_instance(instance_id):
         })
         return True
     except Exception as e:
+        error_type = _parse_aws_error_message(str(e))
         logger.error(f"AWS Error restarting instance: {e}")
-        _log_aws_operation("reboot_instances", instance_id, {"error": str(e)}, False, e)
+        _log_aws_operation("reboot_instances", instance_id, {
+            "error": str(e),
+            "error_type": error_type
+        }, False, e)
         return False
 
 def get_instance_by_name(instance_name):

@@ -256,6 +256,196 @@ def test_restart_instance_not_controllable():
         result = restart_instance('i-0df9c53001c5c837d')
         assert result is False
 
+# New tests for comprehensive error handling
+def test_start_instance_already_running():
+    """Test start_instance when instance is already running"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'running'
+        
+        from src.aws_client import start_instance
+        
+        result = start_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_start_instance_pending():
+    """Test start_instance when instance is pending"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'pending'
+        
+        from src.aws_client import start_instance
+        
+        result = start_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_start_instance_stopping():
+    """Test start_instance when instance is stopping"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'stopping'
+        
+        from src.aws_client import start_instance
+        
+        result = start_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_stop_instance_already_stopped():
+    """Test stop_instance when instance is already stopped"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'stopped'
+        
+        from src.aws_client import stop_instance
+        
+        result = stop_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_stop_instance_stopping():
+    """Test stop_instance when instance is already stopping"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'stopping'
+        
+        from src.aws_client import stop_instance
+        
+        result = stop_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_stop_instance_pending():
+    """Test stop_instance when instance is pending"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'pending'
+        
+        from src.aws_client import stop_instance
+        
+        result = stop_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_restart_instance_pending():
+    """Test restart_instance when instance is pending"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'pending'
+        
+        from src.aws_client import restart_instance
+        
+        result = restart_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_restart_instance_stopping():
+    """Test restart_instance when instance is stopping"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'stopping'
+        
+        from src.aws_client import restart_instance
+        
+        result = restart_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+# Handler tests for user-friendly error messages
+def test_ec2_power_start_already_running():
+    """Test EC2 power start when instance is already running"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.start_instance') as mock_start, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'running'
+            mock_start.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on'}
+            
+            result = handle_ec2_power(request)
+            assert "already running" in result.json['text']
+
+def test_ec2_power_start_pending():
+    """Test EC2 power start when instance is pending"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.start_instance') as mock_start, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'pending'
+            mock_start.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d on'}
+            
+            result = handle_ec2_power(request)
+            assert "already starting" in result.json['text']
+
+def test_ec2_power_stop_already_stopped():
+    """Test EC2 power stop when instance is already stopped"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.stop_instance') as mock_stop, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'stopped'
+            mock_stop.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d off'}
+            
+            result = handle_ec2_power(request)
+            assert "already stopped" in result.json['text']
+
+def test_ec2_power_restart_pending():
+    """Test EC2 power restart when instance is pending"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.restart_instance') as mock_restart, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'pending'
+            mock_restart.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d restart'}
+            
+            result = handle_ec2_power(request)
+            assert "currently starting" in result.json['text']
+
 def test_ec2_power_access_denied():
     """Test EC2 power access denied for unauthorized user - now any authenticated user can access"""
     with app.app_context():
@@ -684,6 +874,7 @@ def test_ec2_schedule_case_insensitive_clear():
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_name') as mock_get_name, \
              patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
             mock_delete_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
@@ -710,6 +901,7 @@ def test_ec2_schedule_complex_time_formats():
              patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
              patch('src.handlers.get_instance_name') as mock_get_name, \
              patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
             mock_set_schedule.return_value = True
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'i-0df9c53001c5c837d'
