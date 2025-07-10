@@ -291,3 +291,9 @@ kubectl get endpoints -n ec2-slack-bot
 ## License
 
 This project is proprietary and confidential.
+
+## Planned Features
+
+- allow users to set schedules for specific days and then an abstraction layer
+for like weekends and weekdays
+- add handling for rebooting an OFF instance
