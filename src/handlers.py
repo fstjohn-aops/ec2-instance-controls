@@ -138,6 +138,13 @@ def handle_ec2_power(request):
                 success = stop_instance(instance_id)
             elif power_state == 'restart':
                 success = restart_instance(instance_id)
+                # Check if restart failed due to instance being stopped
+                if not success and current_state == 'stopped':
+                    # Update the response to show user-friendly error
+                    response = jsonify({
+                        'response_type': 'ephemeral',
+                        'text': f"Cannot restart `{display_name}` ({instance_id}) - instance is currently stopped"
+                    })
             
             # Log the AWS operation result
             _log_user_action(user_id, user_name, f"ec2_power_{power_state}", instance_id, {

@@ -137,6 +137,13 @@ def restart_instance(instance_id):
         _log_aws_operation("reboot_instances", instance_id, {"error": "instance_not_controllable"}, False)
         return False
     
+    # Check current state before attempting restart
+    current_state = get_instance_state(instance_id)
+    if current_state == 'stopped':
+        logger.error(f"Cannot restart instance {instance_id}: instance is currently stopped")
+        _log_aws_operation("reboot_instances", instance_id, {"error": "instance_stopped", "current_state": current_state}, False)
+        return False
+    
     try:
         response = _get_ec2_client().reboot_instances(InstanceIds=[instance_id])
         instance_name = get_instance_name(instance_id)

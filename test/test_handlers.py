@@ -158,6 +158,103 @@ def test_ec2_power_restart_instance():
             assert "Set `test-instance`" in result.json['text']
             assert "to restart" in result.json['text']
 
+def test_ec2_power_restart_stopped_instance():
+    """Test EC2 power restart instance that is currently stopped"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.restart_instance') as mock_restart, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'stopped'
+            mock_restart.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d restart'}
+            
+            result = handle_ec2_power(request)
+            assert "Cannot restart `test-instance`" in result.json['text']
+            assert "instance is currently stopped" in result.json['text']
+
+def test_ec2_power_restart_stopped_instance_no_name():
+    """Test EC2 power restart instance that is currently stopped and has no name"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_state') as mock_get_state, \
+             patch('src.handlers.restart_instance') as mock_restart, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_state.return_value = 'stopped'
+            mock_restart.return_value = False
+            mock_get_name.return_value = None
+            mock_can_control.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d restart'}
+            
+            result = handle_ec2_power(request)
+            assert "Cannot restart `i-0df9c53001c5c837d`" in result.json['text']
+            assert "instance is currently stopped" in result.json['text']
+
+# AWS Client function tests
+def test_restart_instance_stopped():
+    """Test restart_instance when instance is stopped"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state, \
+         patch('src.aws_client.get_instance_name') as mock_get_name:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'stopped'
+        mock_get_name.return_value = 'test-instance'
+        
+        from src.aws_client import restart_instance
+        
+        result = restart_instance('i-0df9c53001c5c837d')
+        assert result is False
+
+def test_restart_instance_running():
+    """Test restart_instance when instance is running"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control, \
+         patch('src.aws_client.get_instance_state') as mock_get_state, \
+         patch('src.aws_client._get_ec2_client') as mock_client, \
+         patch('src.aws_client.get_instance_name') as mock_get_name:
+        
+        mock_can_control.return_value = True
+        mock_get_state.return_value = 'running'
+        mock_get_name.return_value = 'test-instance'
+        
+        # Mock the EC2 client response
+        mock_ec2_client = Mock()
+        mock_ec2_client.reboot_instances.return_value = {
+            'StartingInstances': [{
+                'PreviousState': {'Name': 'running'},
+                'CurrentState': {'Name': 'running'}
+            }]
+        }
+        mock_client.return_value = mock_ec2_client
+        
+        from src.aws_client import restart_instance
+        
+        result = restart_instance('i-0df9c53001c5c837d')
+        assert result is True
+        mock_ec2_client.reboot_instances.assert_called_once_with(InstanceIds=['i-0df9c53001c5c837d'])
+
+def test_restart_instance_not_controllable():
+    """Test restart_instance when instance cannot be controlled"""
+    with patch('src.aws_client.can_control_instance_by_id') as mock_can_control:
+        mock_can_control.return_value = False
+        
+        from src.aws_client import restart_instance
+        
+        result = restart_instance('i-0df9c53001c5c837d')
+        assert result is False
+
 def test_ec2_power_access_denied():
     """Test EC2 power access denied for unauthorized user - now any authenticated user can access"""
     with app.app_context():
