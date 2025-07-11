@@ -681,3 +681,257 @@ def delete_disable_schedule_tag(instance_id):
             "error": str(e)
         }, False, e)
         return False
+
+def get_stakeholders_tag(instance_id):
+    """Get stakeholders tag for an EC2 instance"""
+    tags = get_instance_tags(instance_id)
+    
+    for tag in tags:
+        if tag['Key'] == 'Stakeholders':
+            _log_aws_operation("get_stakeholders_tag", instance_id, {
+                "stakeholders_tag_found": tag['Value']
+            })
+            return tag['Value']
+    
+    _log_aws_operation("get_stakeholders_tag", instance_id, {
+        "stakeholders_tag_found": False
+    })
+    return None
+
+def set_stakeholders_tag(instance_id, stakeholders_list):
+    """Set stakeholders tag for an EC2 instance"""
+    try:
+        # Convert list to comma-separated string
+        stakeholders_str = ','.join(stakeholders_list)
+        
+        tags_to_set = [{
+            'Key': 'Stakeholders',
+            'Value': stakeholders_str
+        }]
+        
+        response = _get_ec2_client().create_tags(
+            Resources=[instance_id],
+            Tags=tags_to_set
+        )
+        
+        logger.info(f"Successfully set stakeholders tag for {instance_id}: {stakeholders_str}")
+        _log_aws_operation("set_stakeholders_tag", instance_id, {
+            "tags_set": [tag['Key'] for tag in tags_to_set],
+            "stakeholders_count": len(stakeholders_list),
+            "stakeholders": stakeholders_list
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error setting stakeholders tag for {instance_id}: {e}")
+        _log_aws_operation("set_stakeholders_tag", instance_id, {
+            "error": str(e),
+            "stakeholders_count": len(stakeholders_list),
+            "stakeholders": stakeholders_list
+        }, False, e)
+        return False
+
+def delete_stakeholders_tag(instance_id):
+    """Delete stakeholders tag for an EC2 instance"""
+    try:
+        response = _get_ec2_client().delete_tags(
+            Resources=[instance_id],
+            Tags=[
+                {'Key': 'Stakeholders'}
+            ]
+        )
+        
+        logger.info(f"Successfully deleted stakeholders tag for {instance_id}")
+        _log_aws_operation("delete_stakeholders_tag", instance_id, {
+            "tags_deleted": ["Stakeholders"]
+        })
+        return True
+        
+    except Exception as e:
+        logger.error(f"AWS Error deleting stakeholders tag for {instance_id}: {e}")
+        _log_aws_operation("delete_stakeholders_tag", instance_id, {
+            "error": str(e)
+        }, False, e)
+        return False
+
+def add_stakeholder(instance_id, user_id):
+    """Add a stakeholder to an EC2 instance"""
+    try:
+        # Get current stakeholders
+        current_stakeholders_str = get_stakeholders_tag(instance_id)
+        current_stakeholders = []
+        
+        if current_stakeholders_str:
+            current_stakeholders = [s.strip() for s in current_stakeholders_str.split(',') if s.strip()]
+        
+        # Check if user is already a stakeholder
+        if user_id in current_stakeholders:
+            logger.info(f"User {user_id} is already a stakeholder for instance {instance_id}")
+            _log_aws_operation("add_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "already_stakeholder",
+                "current_stakeholders_count": len(current_stakeholders)
+            })
+            return True, "already_stakeholder"
+        
+        # Check if we're at the maximum limit
+        if len(current_stakeholders) >= 10:
+            logger.warning(f"Cannot add stakeholder {user_id} to instance {instance_id}: max limit reached")
+            _log_aws_operation("add_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "max_limit_reached",
+                "current_stakeholders_count": len(current_stakeholders)
+            }, False)
+            return False, "max_limit_reached"
+        
+        # Add new stakeholder
+        new_stakeholders = current_stakeholders + [user_id]
+        success = set_stakeholders_tag(instance_id, new_stakeholders)
+        
+        if success:
+            logger.info(f"Successfully added stakeholder {user_id} to instance {instance_id}")
+            _log_aws_operation("add_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "added",
+                "previous_stakeholders_count": len(current_stakeholders),
+                "new_stakeholders_count": len(new_stakeholders)
+            })
+            return True, "added"
+        else:
+            logger.error(f"Failed to add stakeholder {user_id} to instance {instance_id}")
+            _log_aws_operation("add_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "failed",
+                "current_stakeholders_count": len(current_stakeholders)
+            }, False)
+            return False, "failed"
+            
+    except Exception as e:
+        logger.error(f"Error adding stakeholder {user_id} to instance {instance_id}: {e}")
+        _log_aws_operation("add_stakeholder", instance_id, {
+            "user_id": user_id,
+            "action": "error",
+            "error": str(e)
+        }, False, e)
+        return False, "error"
+
+def remove_stakeholder(instance_id, user_id):
+    """Remove a stakeholder from an EC2 instance"""
+    try:
+        # Get current stakeholders
+        current_stakeholders_str = get_stakeholders_tag(instance_id)
+        current_stakeholders = []
+        
+        if current_stakeholders_str:
+            current_stakeholders = [s.strip() for s in current_stakeholders_str.split(',') if s.strip()]
+        
+        # Check if user is a stakeholder
+        if user_id not in current_stakeholders:
+            logger.info(f"User {user_id} is not a stakeholder for instance {instance_id}")
+            _log_aws_operation("remove_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "not_stakeholder",
+                "current_stakeholders_count": len(current_stakeholders)
+            })
+            return True, "not_stakeholder"
+        
+        # Remove stakeholder
+        new_stakeholders = [s for s in current_stakeholders if s != user_id]
+        
+        # If no stakeholders remain, delete the tag entirely
+        if not new_stakeholders:
+            success = delete_stakeholders_tag(instance_id)
+            action = "removed_and_deleted_tag"
+        else:
+            success = set_stakeholders_tag(instance_id, new_stakeholders)
+            action = "removed"
+        
+        if success:
+            logger.info(f"Successfully removed stakeholder {user_id} from instance {instance_id}")
+            _log_aws_operation("remove_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": action,
+                "previous_stakeholders_count": len(current_stakeholders),
+                "new_stakeholders_count": len(new_stakeholders)
+            })
+            return True, action
+        else:
+            logger.error(f"Failed to remove stakeholder {user_id} from instance {instance_id}")
+            _log_aws_operation("remove_stakeholder", instance_id, {
+                "user_id": user_id,
+                "action": "failed",
+                "current_stakeholders_count": len(current_stakeholders)
+            }, False)
+            return False, "failed"
+            
+    except Exception as e:
+        logger.error(f"Error removing stakeholder {user_id} from instance {instance_id}: {e}")
+        _log_aws_operation("remove_stakeholder", instance_id, {
+            "user_id": user_id,
+            "action": "error",
+            "error": str(e)
+        }, False, e)
+        return False, "error"
+
+def get_instances_by_stakeholder(user_id):
+    """Get all instances where a user is a stakeholder"""
+    try:
+        # Get all controllable instances
+        instances = get_controllable_instances()
+        user_instances = []
+        
+        for instance in instances:
+            instance_id = instance['InstanceId']
+            stakeholders_str = get_stakeholders_tag(instance_id)
+            
+            if stakeholders_str:
+                stakeholders = [s.strip() for s in stakeholders_str.split(',') if s.strip()]
+                if user_id in stakeholders:
+                    instance_name = get_instance_name(instance_id)
+                    user_instances.append({
+                        'instance_id': instance_id,
+                        'instance_name': instance_name,
+                        'state': get_instance_state(instance_id)
+                    })
+        
+        logger.info(f"Found {len(user_instances)} instances where user {user_id} is a stakeholder")
+        _log_aws_operation("get_instances_by_stakeholder", user_id, {
+            "instances_found": len(user_instances),
+            "instance_ids": [inst['instance_id'] for inst in user_instances]
+        })
+        return user_instances
+        
+    except Exception as e:
+        logger.error(f"Error getting instances for stakeholder {user_id}: {e}")
+        _log_aws_operation("get_instances_by_stakeholder", user_id, {
+            "error": str(e)
+        }, False, e)
+        return []
+
+def is_user_stakeholder(instance_id, user_id):
+    """Check if a user is a stakeholder for a specific instance"""
+    try:
+        # Get current stakeholders
+        current_stakeholders_str = get_stakeholders_tag(instance_id)
+        current_stakeholders = []
+        
+        if current_stakeholders_str:
+            current_stakeholders = [s.strip() for s in current_stakeholders_str.split(',') if s.strip()]
+        
+        is_stakeholder = user_id in current_stakeholders
+        
+        logger.info(f"User {user_id} is {'a' if is_stakeholder else 'not a'} stakeholder for instance {instance_id}")
+        _log_aws_operation("is_user_stakeholder", instance_id, {
+            "user_id": user_id,
+            "is_stakeholder": is_stakeholder,
+            "current_stakeholders_count": len(current_stakeholders)
+        })
+        return is_stakeholder
+        
+    except Exception as e:
+        logger.error(f"Error checking if user {user_id} is stakeholder for instance {instance_id}: {e}")
+        _log_aws_operation("is_user_stakeholder", instance_id, {
+            "user_id": user_id,
+            "error": str(e)
+        }, False, e)
+        return False

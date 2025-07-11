@@ -3,7 +3,7 @@ import re
 import json
 from datetime import datetime, timezone
 from flask import jsonify
-from src.aws_client import get_instance_state, start_instance, stop_instance, restart_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id
+from src.aws_client import get_instance_state, start_instance, stop_instance, restart_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id, add_stakeholder, remove_stakeholder, is_user_stakeholder
 from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 from src.disable_schedule import parse_hours, get_disable_schedule, set_disable_schedule, delete_disable_schedule, format_disable_schedule_display
@@ -696,3 +696,167 @@ def handle_ec2_disable_schedule(request):
             "text": text
         }, False)
         return "Usage: <instance-id|instance-name> [<hours>] or <instance-id|instance-name> cancel"
+
+def handle_ec2_stakeholder(request):
+    """Handle the EC2 stakeholder endpoint - allows users to claim, remove, and check stakeholder status"""
+    user_id = request.form.get('user_id', '')
+    user_name = request.form.get('user_name', 'Unknown')
+    text = request.form.get('text', '').strip()
+    
+    # Parse text: "<instance-id|instance-name> [claim|remove|check]"
+    parts = text.split()
+    
+    if len(parts) == 0:
+        _log_user_action(user_id, user_name, "ec2_stakeholder", "invalid", {
+            "error": "invalid_format",
+            "text": text
+        }, False)
+        return "Usage: <instance-id|instance-name> [claim|remove|check]"
+    
+    # Handle instance-specific commands
+    if len(parts) < 1 or len(parts) > 2:
+        _log_user_action(user_id, user_name, "ec2_stakeholder", "invalid", {
+            "error": "invalid_format",
+            "text": text
+        }, False)
+        return "Usage: <instance-id|instance-name> [claim|remove|check]"
+    
+    instance_identifier = parts[0]
+    action = parts[1].lower() if len(parts) == 2 else 'claim'  # Default to claim if no action specified
+    
+    # Validate action
+    if action not in ['claim', 'remove', 'check']:
+        _log_user_action(user_id, user_name, "ec2_stakeholder", instance_identifier, {
+            "error": "invalid_action",
+            "action": action
+        }, False)
+        return "Action must be 'claim', 'remove', or 'check'"
+    
+    # Resolve to instance ID
+    instance_id = resolve_instance_identifier(instance_identifier)
+    logger.info(f"resolve_instance_identifier('{instance_identifier}') returned: {instance_id}")
+    if not instance_id:
+        _log_user_action(user_id, user_name, "ec2_stakeholder", instance_identifier, {
+            "error": "instance_not_found",
+            "action": action
+        }, False)
+        return f"Instance `{instance_identifier}` not found"
+    
+    # Check if instance can be controlled by this service
+    if not can_control_instance_by_id(instance_id):
+        instance_name = get_instance_name(instance_id)
+        display_name = instance_name if instance_name else instance_id
+        _log_user_action(user_id, user_name, "ec2_stakeholder", instance_id, {
+            "error": "instance_not_controllable",
+            "instance_name": instance_name,
+            "action": action
+        }, False)
+        return f"Instance `{display_name}` ({instance_id}) cannot be controlled by this service. Add the `EC2ControlsEnabled` tag with a truthy value to enable control."
+    
+    # Get instance name for display if available
+    instance_name = get_instance_name(instance_id)
+    display_name = instance_name if instance_name else instance_id
+    
+    # Perform the requested action
+    if action == 'claim':
+        success, result = add_stakeholder(instance_id, user_id)
+        
+        if success:
+            if result == "added":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_claim", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "added_stakeholder",
+                    "original_identifier": instance_identifier
+                })
+                return f"You are now a stakeholder for `{display_name}` ({instance_id})"
+            elif result == "already_stakeholder":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_claim", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "already_stakeholder",
+                    "original_identifier": instance_identifier
+                })
+                return f"You are already a stakeholder for `{display_name}` ({instance_id})"
+            else:
+                _log_user_action(user_id, user_name, "ec2_stakeholder_claim", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "unknown_result",
+                    "result": result,
+                    "original_identifier": instance_identifier
+                }, False)
+                return f"Failed to claim `{display_name}` ({instance_id}) - please try again"
+        else:
+            if result == "max_limit_reached":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_claim", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "max_limit_reached",
+                    "original_identifier": instance_identifier
+                }, False)
+                return f"Max stakeholders (10) reached for `{display_name}` ({instance_id})"
+            else:
+                _log_user_action(user_id, user_name, "ec2_stakeholder_claim", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "failed",
+                    "result": result,
+                    "original_identifier": instance_identifier
+                }, False)
+                return f"Failed to claim `{display_name}` ({instance_id}) - please try again"
+    
+    elif action == 'remove':
+        success, result = remove_stakeholder(instance_id, user_id)
+        
+        if success:
+            if result == "removed":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_remove", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "removed_stakeholder",
+                    "original_identifier": instance_identifier
+                })
+                return f"You are no longer a stakeholder for `{display_name}` ({instance_id})"
+            elif result == "removed_and_deleted_tag":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_remove", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "removed_stakeholder_and_deleted_tag",
+                    "original_identifier": instance_identifier
+                })
+                return f"You are no longer a stakeholder for `{display_name}` ({instance_id})"
+            elif result == "not_stakeholder":
+                _log_user_action(user_id, user_name, "ec2_stakeholder_remove", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "not_stakeholder",
+                    "original_identifier": instance_identifier
+                })
+                return f"You are not a stakeholder for `{display_name}` ({instance_id})"
+            else:
+                _log_user_action(user_id, user_name, "ec2_stakeholder_remove", instance_id, {
+                    "instance_name": instance_name,
+                    "action": "unknown_result",
+                    "result": result,
+                    "original_identifier": instance_identifier
+                }, False)
+                return f"Failed to remove stakeholder status for `{display_name}` ({instance_id}) - please try again"
+        else:
+            _log_user_action(user_id, user_name, "ec2_stakeholder_remove", instance_id, {
+                "instance_name": instance_name,
+                "action": "failed",
+                "result": result,
+                "original_identifier": instance_identifier
+            }, False)
+            return f"Failed to remove stakeholder status for `{display_name}` ({instance_id}) - please try again"
+    
+    elif action == 'check':
+        is_stakeholder = is_user_stakeholder(instance_id, user_id)
+        
+        if is_stakeholder:
+            _log_user_action(user_id, user_name, "ec2_stakeholder_check", instance_id, {
+                "instance_name": instance_name,
+                "action": "is_stakeholder",
+                "original_identifier": instance_identifier
+            })
+            return f"You are a stakeholder for `{display_name}` ({instance_id})"
+        else:
+            _log_user_action(user_id, user_name, "ec2_stakeholder_check", instance_id, {
+                "instance_name": instance_name,
+                "action": "not_stakeholder",
+                "original_identifier": instance_identifier
+            })
+            return f"You are not a stakeholder for `{display_name}` ({instance_id})"

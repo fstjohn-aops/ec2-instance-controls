@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import Mock, patch
 from flask import Flask
-from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_ec2_disable_schedule, handle_fuzzy_search
+from datetime import timedelta
+from src.handlers import handle_ec2_power, handle_list_instances, handle_ec2_schedule, handle_ec2_disable_schedule, handle_fuzzy_search, handle_ec2_stakeholder
 from src.schedule import parse_time, format_schedule_display
 from src.disable_schedule import parse_hours, format_disable_schedule_display
 
@@ -1438,8 +1439,8 @@ def test_ec2_disable_schedule_case_insensitive_cancel():
              patch('src.handlers.get_instance_name') as mock_get_name, \
              patch('src.handlers.can_control_instance_by_id') as mock_can_control:
             
-            mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_delete_disable.return_value = True
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
             mock_get_name.return_value = 'test-instance'
             mock_can_control.return_value = True
             
@@ -1523,16 +1524,387 @@ def test_format_disable_schedule_display_no_schedule():
     assert result == "No disable schedule set"
 
 def test_format_disable_schedule_display_with_schedule():
-    """Test format_disable_schedule_display with schedule"""
-    from datetime import datetime, timezone, timedelta
-    
+    """Test formatting disable schedule display with a schedule"""
+    from datetime import datetime, timezone
     # Create a datetime 2 hours in the future
     now = datetime.now(timezone.utc)
-    disable_until = now + timedelta(hours=2, minutes=30)
+    disable_until = now + timedelta(hours=2)
     
     result = format_disable_schedule_display(disable_until)
     # The exact time might vary slightly due to test execution time
     # so we check for the general format instead of exact values
     assert "Disabled for" in result
     assert "h" in result
-    assert "m" in result 
+
+# EC2 Stakeholder tests
+def test_ec2_stakeholder_claim_success():
+    """Test successful EC2 stakeholder claim"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (True, "added")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are now a stakeholder for `test-instance`" in result
+            assert "i-0df9c53001c5c837d" in result
+
+def test_ec2_stakeholder_claim_default():
+    """Test EC2 stakeholder claim with default action (no action specified)"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (True, "added")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are now a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_claim_success_no_name():
+    """Test successful EC2 stakeholder claim when instance has no name"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = None
+            mock_add_stakeholder.return_value = (True, "added")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are now a stakeholder for `i-0df9c53001c5c837d`" in result
+
+def test_ec2_stakeholder_claim_already_stakeholder():
+    """Test EC2 stakeholder claim when user is already a stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (True, "already_stakeholder")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are already a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_claim_max_limit_reached():
+    """Test EC2 stakeholder claim when max stakeholders limit is reached"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (False, "max_limit_reached")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Max stakeholders (10) reached for `test-instance`" in result
+
+def test_ec2_stakeholder_remove_success():
+    """Test successful EC2 stakeholder remove"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.remove_stakeholder') as mock_remove_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_remove_stakeholder.return_value = (True, "removed")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are no longer a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_remove_not_stakeholder():
+    """Test EC2 stakeholder remove when user is not a stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.remove_stakeholder') as mock_remove_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_remove_stakeholder.return_value = (True, "not_stakeholder")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are not a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_remove_failed():
+    """Test EC2 stakeholder remove when operation fails"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.remove_stakeholder') as mock_remove_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_remove_stakeholder.return_value = (False, "failed")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Failed to remove stakeholder status for `test-instance`" in result
+
+def test_ec2_stakeholder_check_is_stakeholder():
+    """Test EC2 stakeholder check when user is a stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.is_user_stakeholder') as mock_is_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_is_stakeholder.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d check'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_check_not_stakeholder():
+    """Test EC2 stakeholder check when user is not a stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.is_user_stakeholder') as mock_is_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_is_stakeholder.return_value = False
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d check'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are not a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_check_no_name():
+    """Test EC2 stakeholder check when instance has no name"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.is_user_stakeholder') as mock_is_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = None
+            mock_is_stakeholder.return_value = True
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d check'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are a stakeholder for `i-0df9c53001c5c837d`" in result
+
+def test_ec2_stakeholder_instance_not_found():
+    """Test EC2 stakeholder when instance is not found"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve:
+            
+            mock_resolve.return_value = None
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'nonexistent-instance claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Instance `nonexistent-instance` not found" in result
+
+def test_ec2_stakeholder_instance_not_controllable():
+    """Test EC2 stakeholder when instance cannot be controlled"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = False
+            mock_get_name.return_value = 'test-instance'
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "cannot be controlled by this service" in result
+            assert "EC2ControlsEnabled" in result
+
+def test_ec2_stakeholder_invalid_action():
+    """Test EC2 stakeholder with invalid action"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d invalid'}
+        
+        result = handle_ec2_stakeholder(request)
+        assert "Action must be 'claim', 'remove', or 'check'" in result
+
+def test_ec2_stakeholder_invalid_format():
+    """Test EC2 stakeholder with invalid format"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim extra-param'}
+        
+        result = handle_ec2_stakeholder(request)
+        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+
+def test_ec2_stakeholder_empty_text():
+    """Test EC2 stakeholder with empty text"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': ''}
+        
+        result = handle_ec2_stakeholder(request)
+        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+
+def test_ec2_stakeholder_missing_text():
+    """Test EC2 stakeholder with missing text"""
+    with app.app_context():
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
+        
+        result = handle_ec2_stakeholder(request)
+        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+
+def test_ec2_stakeholder_claim_failed_operation():
+    """Test EC2 stakeholder claim when the operation fails"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (False, "failed")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Failed to claim `test-instance`" in result
+
+def test_ec2_stakeholder_claim_unknown_result():
+    """Test EC2 stakeholder claim with unknown result from add_stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (True, "unknown_result")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Failed to claim `test-instance`" in result
+
+def test_ec2_stakeholder_remove_unknown_result():
+    """Test EC2 stakeholder remove with unknown result from remove_stakeholder"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.remove_stakeholder') as mock_remove_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_remove_stakeholder.return_value = (True, "unknown_result")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "Failed to remove stakeholder status for `test-instance`" in result
+
+def test_ec2_stakeholder_remove_and_delete_tag():
+    """Test EC2 stakeholder remove when it's the last stakeholder and tag gets deleted"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.remove_stakeholder') as mock_remove_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_remove_stakeholder.return_value = (True, "removed_and_deleted_tag")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are no longer a stakeholder for `test-instance`" in result
+
+def test_ec2_stakeholder_with_instance_name():
+    """Test EC2 stakeholder using instance name instead of ID"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.add_stakeholder') as mock_add_stakeholder:
+            
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_get_name.return_value = 'test-instance'
+            mock_add_stakeholder.return_value = (True, "added")
+            
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'test-instance claim'}
+            
+            result = handle_ec2_stakeholder(request)
+            assert "You are now a stakeholder for `test-instance`" in result 

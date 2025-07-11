@@ -63,6 +63,7 @@ The application exposes the following endpoints for Slack integration:
 - `POST /ec2-power-state` - Alias for power control endpoint
 - `POST /ec2-schedule` - Manage instance schedules
 - `POST /ec2-disable-schedule` - Temporarily disable instance scheduling
+- `POST /ec2-stakeholder` - Manage instance stakeholder status
 
 ## Slack Commands
 
@@ -113,6 +114,21 @@ Performs fuzzy search for instances by name or ID. Supports partial matches and 
 - `1h`, `2h`, `24h`, `48h`, etc.
 - Minimum: 1 hour
 - Maximum: No limit (use responsibly)
+
+### Instance Stakeholder Management
+```
+/ec2-stakeholder <instance-id|instance-name> [claim|remove|check]
+```
+- `i-1234567890abcdef0` - Claim instance (default action)
+- `i-1234567890abcdef0 claim` - Explicitly claim instance
+- `i-1234567890abcdef0 remove` - Remove yourself as stakeholder
+- `i-1234567890abcdef0 check` - Check if you are a stakeholder
+
+**Features:**
+- Users can claim instances as stakeholders (max 10 per instance)
+- Users can remove themselves as stakeholders
+- Users can check their stakeholder status on specific instances
+- Only works with instances that have `EC2ControlsEnabled` tag
 
 ## Security Model
 
