@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# --- Configuration ---
+IMAGE_NAME="ec2-instance-controls"
+# ---------------------
+
 # Check if tag parameter is provided
 if [ -z "$1" ]; then
     echo "Usage: $0 <tag>"
@@ -10,11 +14,11 @@ fi
 TAG=$1
 
 # Build x86_64 image for EKS compatibility
-podman build --platform linux/amd64 -t ec2-instance-controls:latest .
+podman build --platform linux/amd64 -t $IMAGE_NAME:latest .
 
 # Tag with provided tag
-podman tag ec2-instance-controls:latest ec2-instance-controls:$TAG
+podman tag $IMAGE_NAME:latest $IMAGE_NAME:$TAG
 
 # Show built images
 echo "Built images:"
-podman images ec2-instance-controls
+podman images $IMAGE_NAME
