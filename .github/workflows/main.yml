@@ -78,5 +78,8 @@ jobs:
             echo '```'
             echo ""
             echo "Also pushed:"
-            echo "- ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            echo ""
+            echo '```'
+            echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            echo '```'
           } >> $GITHUB_STEP_SUMMARY 
