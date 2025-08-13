@@ -6,4 +6,5 @@ echo "Running tests..."
 if [ -f venv/bin/activate ]; then
   source venv/bin/activate
 fi
+export PYTHONPATH=src:${PYTHONPATH}
 pytest "$@"
