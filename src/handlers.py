@@ -11,6 +11,32 @@ import os
 
 logger = logging.getLogger(__name__)
 
+# Centralized command alias maps
+ACTION_ALIASES_POWER = {
+	'on': {'on', 'start', 'up', 'boot', 'poweron', 'enable'},
+	'off': {'off', 'stop', 'down', 'halt', 'shutdown', 'poweroff',},
+	'restart': {'restart', 'reboot', 'bounce', 'cycle', 'reload'}
+}
+
+ACTION_ALIASES_STAKEHOLDER = {
+	'claim': {'claim', 'add', 'join', 'register', 'own'},
+	'remove': {'remove', 'unclaim', 'leave', 'unregister', 'drop', 'rm', 'delete'},
+	'check': {'check', 'status', 'show', 'view', 'see', 'info', 'get', 'stat'}
+}
+
+ALIASES_SCHEDULE_CLEAR = {'clear', 'reset', 'unset', 'no', 'remove', 'delete', 'none', 'empty'}
+ALIASES_DISABLE_CANCEL = {'cancel', 'clear', 'reset', 'unset', 'no', 'remove', 'delete', 'resume', 'enable', 're-enable', 'reenable', 'unpause', 'continue'}
+
+
+def normalize_command(value, alias_map):
+	"""Normalize a user-provided command to its canonical value using alias_map.
+	Returns the input lowercased if no alias matches (so existing validation can handle it)."""
+	v = value.lower()
+	for canonical, aliases in alias_map.items():
+		if v == canonical or v in aliases:
+			return canonical
+	return v
+
 def _log_user_action(user_id, user_name, action, target, details=None, success=True):
     """Log user actions for auditing purposes"""
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -80,6 +106,9 @@ def handle_ec2_power(request):
     elif len(parts) == 2:
         # Instance identifier and power state - change state
         instance_identifier, power_state = parts
+        
+        # Normalize power state using aliases
+        power_state = normalize_command(power_state, ACTION_ALIASES_POWER)
         
         # Resolve to instance ID
         instance_id = resolve_instance_identifier(instance_identifier)
@@ -346,8 +375,7 @@ def handle_ec2_schedule(request):
             return f"Instance `{instance_identifier}` not found"
         
         # Check if this is a clear command
-        clear_commands = ['clear', 'reset', 'unset', 'no', 'remove', 'delete']
-        if command.lower() in clear_commands:
+        if command.lower() in ALIASES_SCHEDULE_CLEAR:
             # Check if instance can be controlled by this service
             if not can_control_instance_by_id(instance_id):
                 instance_name = get_instance_name(instance_id)
@@ -609,8 +637,7 @@ def handle_ec2_disable_schedule(request):
         command = ' '.join(command_parts)
         
         # Check if this is a cancel command
-        cancel_commands = ['cancel', 'clear', 'reset', 'unset', 'no', 'remove', 'delete']
-        if command.lower() in cancel_commands:
+        if command.lower() in ALIASES_DISABLE_CANCEL:
             # Check if instance can be controlled by this service
             if not can_control_instance_by_id(instance_id):
                 instance_name = get_instance_name(instance_id)
@@ -723,9 +750,8 @@ def handle_ec2_stakeholder(request):
     
     instance_identifier = parts[0]
     action = parts[1].lower() if len(parts) == 2 else 'claim'  # Default to claim if no action specified
-    # Map action aliases to canonical actions
-    if action in ['show', 'chec', 'check', 'stat', 'view', 'status', 'info', 'get']:
-        action = 'check'
+    # Normalize stakeholder action using aliases
+    action = normalize_command(action, ACTION_ALIASES_STAKEHOLDER)
     
     # Validate action
     if action not in ['claim', 'remove', 'check']:
