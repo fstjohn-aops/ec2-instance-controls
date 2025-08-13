@@ -1794,7 +1794,7 @@ def test_ec2_stakeholder_invalid_format():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim extra-param'}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
 
 def test_ec2_stakeholder_empty_text():
     """Test EC2 stakeholder with empty text"""
@@ -1803,7 +1803,7 @@ def test_ec2_stakeholder_empty_text():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': ''}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
 
 def test_ec2_stakeholder_missing_text():
     """Test EC2 stakeholder with missing text"""
@@ -1812,7 +1812,7 @@ def test_ec2_stakeholder_missing_text():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|check]" in result
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
 
 def test_ec2_stakeholder_claim_failed_operation():
     """Test EC2 stakeholder claim when the operation fails"""
@@ -1908,3 +1908,16 @@ def test_ec2_stakeholder_with_instance_name():
             
             result = handle_ec2_stakeholder(request)
             assert "You are now a stakeholder for `test-instance`" in result 
+
+def test_resolve_identifier_with_suffix_append():
+    """Users can pass only the prefix and it resolves by appending INSTANCE_NAME_SUFFIX"""
+    with patch('src.aws_client.get_instance_by_name') as mock_get_by_name, \
+         patch('src.aws_client.INSTANCE_NAME_SUFFIX', 'aopstest.com'):
+        # First call with short name should return None, then second with suffix returns ID
+        mock_get_by_name.side_effect = [None, 'i-abcdef0123456789a']
+        from src.aws_client import resolve_instance_identifier
+        instance_id = resolve_instance_identifier('web01')
+        assert instance_id == 'i-abcdef0123456789a'
+        # Ensure called first with short name, then with suffixed name
+        assert mock_get_by_name.call_args_list[0].args[0] == 'web01'
+        assert mock_get_by_name.call_args_list[1].args[0] == 'web01.aopstest.com'

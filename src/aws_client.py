@@ -4,6 +4,7 @@ import os
 import json
 from datetime import datetime, timezone
 from src.config import AWS_REGION
+from src.config import INSTANCE_NAME_SUFFIX
 
 logger = logging.getLogger(__name__)
 
@@ -423,9 +424,20 @@ def resolve_instance_identifier(identifier):
     if instance_id:
         logger.info(f"Found instance '{identifier}' with ID: {instance_id}")
         return instance_id
-    else:
-        logger.warning(f"No instance found with name: {identifier}")
-        return None
+
+    # If not found and identifier seems like a short prefix, try appending the domain suffix
+    if '.' not in identifier and INSTANCE_NAME_SUFFIX:
+        suffix = INSTANCE_NAME_SUFFIX.lstrip('.')
+        fq_name = f"{identifier}.{suffix}" if suffix else identifier
+        logger.info(f"No instance found by short name; trying with suffix: '{fq_name}'")
+        instance_id = get_instance_by_name(fq_name)
+        logger.info(f"get_instance_by_name('{fq_name}') returned: {instance_id}")
+        if instance_id:
+            logger.info(f"Found instance '{fq_name}' with ID: {instance_id}")
+            return instance_id
+
+    logger.warning(f"No instance found with name: {identifier}")
+    return None
 
 def fuzzy_search_instances(search_term):
     """Search for EC2 instances by name or ID using fuzzy matching - only returns controllable instances"""

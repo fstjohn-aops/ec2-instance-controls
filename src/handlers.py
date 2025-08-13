@@ -711,7 +711,7 @@ def handle_ec2_stakeholder(request):
             "error": "invalid_format",
             "text": text
         }, False)
-        return "Usage: <instance-id|instance-name> [claim|remove|check]"
+        return "Usage: <instance-id|instance-name> [claim|remove|show]"
     
     # Handle instance-specific commands
     if len(parts) < 1 or len(parts) > 2:
@@ -719,10 +719,13 @@ def handle_ec2_stakeholder(request):
             "error": "invalid_format",
             "text": text
         }, False)
-        return "Usage: <instance-id|instance-name> [claim|remove|check]"
+        return "Usage: <instance-id|instance-name> [claim|remove|show]"
     
     instance_identifier = parts[0]
     action = parts[1].lower() if len(parts) == 2 else 'claim'  # Default to claim if no action specified
+    # Map action aliases to canonical actions
+    if action in ['show', 'chec', 'check', 'stat', 'view', 'status', 'info', 'get']:
+        action = 'check'
     
     # Validate action
     if action not in ['claim', 'remove', 'check']:
