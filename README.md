@@ -62,7 +62,7 @@ The application exposes the following endpoints for Slack integration:
 - `POST /ec2/power` - Control instance power state (start/stop/restart)
 - `POST /ec2-power-state` - Alias for power control endpoint
 - `POST /ec2-schedule` - Manage instance schedules
-- `POST /ec2-disable-schedule` - Temporarily disable instance scheduling
+- `POST /ec2-pause-scheduler` - Temporarily pause the scheduler for an instance
 - `POST /ec2-stakeholder` - Manage instance stakeholder status
 
 ## Slack Commands
@@ -101,14 +101,14 @@ Performs fuzzy search for instances by name or ID. Supports partial matches and 
 - `9:00am`, `9am`, `09:00`, `9:00 AM`
 - `5:00pm`, `5pm`, `17:00`, `5:00 PM`
 
-### Disable Instance Scheduling
+### Pause Scheduler
 ```
-/ec2-disable-schedule <instance-id|instance-name> [<hours>|cancel]
+/ec2-pause-scheduler <instance-id|instance-name> [<hours>|cancel]
 ```
-- `i-1234567890abcdef0` - Check current disable schedule status
-- `i-1234567890abcdef0 2h` - Disable scheduling for 2 hours
-- `i-1234567890abcdef0 24h` - Disable scheduling for 24 hours
-- `i-1234567890abcdef0 cancel` - Re-enable scheduling immediately
+- `i-1234567890abcdef0` - Check current pause status
+- `i-1234567890abcdef0 2h` - Pause scheduler for 2 hours
+- `i-1234567890abcdef0 24h` - Pause scheduler for 24 hours
+- `i-1234567890abcdef0 cancel` - Resume scheduler immediately
 
 **Hours Format Support:**
 - `1h`, `2h`, `24h`, `48h`, etc.

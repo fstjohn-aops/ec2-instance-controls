@@ -122,7 +122,7 @@ def ec2_power_state():
 def ec2_schedule():
     return handle_ec2_schedule(request)
 
-@app.route('/ec2-disable-schedule', methods=['POST'])
+@app.route('/ec2-pause-scheduler', methods=['POST'])
 def ec2_disable_schedule():
     return handle_ec2_disable_schedule(request)
 
