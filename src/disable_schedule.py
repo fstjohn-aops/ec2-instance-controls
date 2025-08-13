@@ -190,12 +190,12 @@ def delete_disable_schedule(instance_id):
 def format_disable_schedule_display(disable_datetime):
     """Format disable schedule for display"""
     if not disable_datetime:
-        return "No disable schedule set"
+        return "Not paused right now"
     
     # Calculate remaining time
     now = datetime.now(timezone.utc)
     if now >= disable_datetime:
-        return "No disable schedule set (expired)"
+        return "Not paused right now"
     
     remaining = disable_datetime - now
     hours = int(remaining.total_seconds() // 3600)
@@ -203,11 +203,11 @@ def format_disable_schedule_display(disable_datetime):
     
     if hours > 0:
         if minutes > 0:
-            return f"Disabled for {hours}h {minutes}m"
+            return f"Currently paused for {hours}h {minutes}m"
         else:
-            return f"Disabled for {hours}h"
+            return f"Currently paused for {hours}h"
     else:
-        return f"Disabled for {minutes}m"
+        return f"Currently paused for {minutes}m"
 
 def is_schedule_disabled(instance_id):
     """Check if schedule is currently disabled for an instance"""

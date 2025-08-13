@@ -1206,7 +1206,7 @@ def test_ec2_disable_schedule_get_no_schedule():
             
             result = handle_ec2_disable_schedule(request)
             assert "test-instance" in result
-            assert "No disable schedule set" in result
+            assert "Not paused right now" in result
 
 def test_ec2_disable_schedule_get_with_schedule():
     """Test EC2 disable schedule get when schedule is set"""
@@ -1231,7 +1231,7 @@ def test_ec2_disable_schedule_get_with_schedule():
             assert "test-instance" in result
             # The exact time might vary slightly due to test execution time
             # so we check for the general format instead of exact values
-            assert "Disabled for" in result
+            assert "Currently paused for" in result
             assert "h" in result
             assert "m" in result
 
@@ -1254,7 +1254,7 @@ def test_ec2_disable_schedule_set_valid():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Disable schedule set for `test-instance`" in result.json['text']
+            assert "Paused scheduler for `test-instance`" in result.json['text']
             assert "for 2 hours" in result.json['text']
 
 def test_ec2_disable_schedule_set_invalid_hours():
@@ -1291,7 +1291,7 @@ def test_ec2_disable_schedule_set_failed():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Failed to set disable schedule for `test-instance`" in result
+            assert "Failed to pause scheduler for `test-instance`" in result
 
 def test_ec2_disable_schedule_access_denied():
     """Test EC2 disable schedule set when instance cannot be controlled"""
@@ -1372,7 +1372,7 @@ def test_ec2_disable_schedule_cancel():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+            assert "Unpaused scheduler service for `test-instance`" in result.json['text']
 
 def test_ec2_disable_schedule_clear():
     """Test EC2 disable schedule clear command"""
@@ -1391,7 +1391,7 @@ def test_ec2_disable_schedule_clear():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+            assert "Unpaused scheduler service for `test-instance`" in result.json['text']
 
 def test_ec2_disable_schedule_cancel_failed():
     """Test EC2 disable schedule cancel when AWS operation fails"""
@@ -1410,7 +1410,7 @@ def test_ec2_disable_schedule_cancel_failed():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Failed to cancel disable schedule for `i-0df9c53001c5c837d`" in result
+            assert "Failed to unpause scheduler for `i-0df9c53001c5c837d`" in result
 
 def test_ec2_disable_schedule_cancel_not_controllable():
     """Test EC2 disable schedule cancel when instance cannot be controlled"""
@@ -1452,7 +1452,7 @@ def test_ec2_disable_schedule_case_insensitive_cancel():
                 request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {command}'}
                 
                 result = handle_ec2_disable_schedule(request)
-                assert "Disable schedule cancelled for `test-instance`" in result.json['text']
+                assert "Unpaused scheduler service for `test-instance`" in result.json['text']
 
 def test_ec2_disable_schedule_various_hours_formats():
     """Test EC2 disable schedule with various hours formats"""
@@ -1479,7 +1479,7 @@ def test_ec2_disable_schedule_various_hours_formats():
                 request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {hours_str}'}
                 
                 result = handle_ec2_disable_schedule(request)
-                assert "Disable schedule set for `test-instance`" in result.json['text']
+                assert "Paused scheduler for `test-instance`" in result.json['text']
                 assert f"for {hours} hours" in result.json['text']
 
 # Disable Schedule Module tests
@@ -1521,7 +1521,7 @@ def test_parse_hours_invalid_number():
 def test_format_disable_schedule_display_no_schedule():
     """Test format_disable_schedule_display with no schedule"""
     result = format_disable_schedule_display(None)
-    assert result == "No disable schedule set"
+    assert result == "Not paused right now"
 
 def test_format_disable_schedule_display_with_schedule():
     """Test formatting disable schedule display with a schedule"""
@@ -1533,7 +1533,7 @@ def test_format_disable_schedule_display_with_schedule():
     result = format_disable_schedule_display(disable_until)
     # The exact time might vary slightly due to test execution time
     # so we check for the general format instead of exact values
-    assert "Disabled for" in result
+    assert "Currently paused for" in result
     assert "h" in result
 
 # EC2 Stakeholder tests

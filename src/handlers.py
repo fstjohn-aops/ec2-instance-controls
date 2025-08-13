@@ -616,7 +616,7 @@ def handle_ec2_disable_schedule(request):
             "original_identifier": instance_identifier
         })
         
-        return f"Disable schedule for `{display_name}` ({instance_id}): {disable_display}"
+        return f"Scheduler for `{display_name}` ({instance_id}): {disable_display}"
     
     elif len(parts) >= 2:
         # Instance identifier and command - could be cancel command or datetime
@@ -666,11 +666,11 @@ def handle_ec2_disable_schedule(request):
             if success:
                 response = jsonify({
                     'response_type': 'ephemeral',
-                    'text': f"Disable schedule cancelled for `{display_name}` ({instance_id})"
+                    'text': f"Unpaused scheduler service for `{display_name}` ({instance_id})"
                 })
                 return response
             else:
-                return f"Failed to cancel disable schedule for `{instance_identifier}`"
+                return f"Failed to unpause scheduler for `{instance_identifier}`"
         else:
             # Not a cancel command, treat as hours
             # Parse the hours
@@ -708,14 +708,14 @@ def handle_ec2_disable_schedule(request):
                 
                 response = jsonify({
                     'response_type': 'ephemeral',
-                    'text': f"Disable schedule set for `{display_name}` ({instance_id}) for {hours} hours"
+                    'text': f"Paused scheduler for `{display_name}` ({instance_id}) for {hours} hours"
                 })
                 return response
             else:
                 _log_user_action(user_id, user_name, "ec2_disable_schedule_set", instance_id, {
                     "error": "failed_to_set_disable_schedule"
                 }, False)
-                return f"Failed to set disable schedule for `{display_name}` ({instance_id})"
+                return f"Failed to pause scheduler for `{display_name}` ({instance_id})"
     
     else:
         _log_user_action(user_id, user_name, "ec2_disable_schedule", "invalid", {
