@@ -36,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: default
     needs: [test]
+    outputs:
+      image_tag: ${{ steps.image_meta.outputs.image_tag }}
+      image_ref: ${{ steps.image_meta.outputs.image_ref }}
+      latest_ref: ${{ steps.image_meta.outputs.latest_ref }}
+      image_uri: ${{ steps.image_meta.outputs.image_uri }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -56,4 +61,22 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          platforms: linux/amd64 
+          platforms: linux/amd64
+      - name: Set image outputs
+        id: image_meta
+        run: |
+          echo "image_tag=${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
+          echo "image_ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
+          echo "latest_ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_OUTPUT
+          echo "image_uri=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}" >> $GITHUB_OUTPUT
+          echo "::notice title=Image URI::${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}"
+          {
+            echo "Docker image pushed (copyable URI):"
+            echo ""
+            echo '```'
+            echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}"
+            echo '```'
+            echo ""
+            echo "Also pushed:"
+            echo "- ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          } >> $GITHUB_STEP_SUMMARY 
