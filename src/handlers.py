@@ -8,6 +8,7 @@ from src.auth import get_all_region_instances
 from src.schedule import parse_time, get_schedule, set_schedule, format_schedule_display, delete_schedule
 from src.disable_schedule import parse_hours, get_disable_schedule, set_disable_schedule, delete_disable_schedule, format_disable_schedule_display
 import os
+from src.config import ON_TIME_LATEST_HOUR
 
 logger = logging.getLogger(__name__)
 
@@ -482,6 +483,15 @@ def handle_ec2_schedule(request):
                 "note": "cross_midnight_or_same_time"
             }, False)
             return f"Invalid schedule: start time ({start_time_str}) must be before end time ({stop_time_str}). Cross-midnight schedules are not supported."
+        
+        # Validate that ON time is not later than allowed
+        if start_time.hour >= ON_TIME_LATEST_HOUR:
+            _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
+                "error": "on_time_too_late",
+                "start_time": start_time_str,
+                "note": f"on_time_must_be_before_{ON_TIME_LATEST_HOUR}am"
+            }, False)
+            return f"Invalid ON time: {start_time_str}. ON time must be at or earlier than {ON_TIME_LATEST_HOUR}:00 AM."
         
         # Get instance name for display if available
         instance_name = get_instance_name(instance_id)

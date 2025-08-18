@@ -1921,3 +1921,24 @@ def test_resolve_identifier_with_suffix_append():
         # Ensure called first with short name, then with suffixed name
         assert mock_get_by_name.call_args_list[0].args[0] == 'web01'
         assert mock_get_by_name.call_args_list[1].args[0] == 'web01.aopstest.com'
+
+def test_ec2_schedule_set_on_time_too_late():
+    """Test setting schedule with ON time at or after 6am (should be rejected)"""
+    with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+         patch('src.handlers.get_instance_name') as mock_get_name:
+        mock_resolve.return_value = 'i-0df9c53001c5c837d'
+        mock_get_name.return_value = 'i-0df9c53001c5c837d'
+
+        # Test exactly 6am
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 6am to 7am'}
+        result = handle_ec2_schedule(request)
+        assert "Invalid ON time" in result
+        assert "earlier than 6:00 AM" in result
+
+        # Test after 6am
+        request = Mock()
+        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 7am to 8am'}
+        result = handle_ec2_schedule(request)
+        assert "Invalid ON time" in result
+        assert "earlier than 6:00 AM" in result
