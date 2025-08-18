@@ -615,10 +615,14 @@ def test_ec2_schedule_set_valid():
             mock_can_control.return_value = True
             
             request = Mock()
-            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 5:59am to 5pm'}
             
             result = handle_ec2_schedule(request)
-            assert "Schedule set for" in result.json['text']
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Schedule set for" in result_text
 
 def test_ec2_schedule_set_invalid_start_time():
     """Test setting schedule with invalid start time"""
@@ -702,10 +706,14 @@ def test_ec2_schedule_set_failed():
             mock_can_control.return_value = True
             
             request = Mock()
-            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 5:59am to 5pm'}
             
             result = handle_ec2_schedule(request)
-            assert "Failed to set schedule" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to set schedule" in result_text
 
 def test_ec2_schedule_access_denied():
     """Test schedule access denied for unauthorized user - now any authenticated user can access"""
@@ -910,9 +918,9 @@ def test_ec2_schedule_complex_time_formats():
             
             # Test various time formats
             time_formats = [
-                '9:30am to 5:30pm',
-                '17:00 to 09:00',
-                '12:00am to 11:59pm'
+                '5:59am to 5:30pm',  # valid
+                '17:00 to 05:59',  # invalid (cross-midnight)
+                '12:00am to 11:59pm'  # valid
             ]
             
             for time_format in time_formats:
@@ -920,10 +928,13 @@ def test_ec2_schedule_complex_time_formats():
                 request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {time_format}'}
                 
                 result = handle_ec2_schedule(request)
-                result_text = result.json['text'] if hasattr(result, 'json') else str(result)
+                if hasattr(result, 'json'):
+                    result_text = result.json['text']
+                else:
+                    result_text = str(result)
                 # Should either succeed or give a clear error message
                 assert any(msg in result_text for msg in [
-                    "Schedule set for", "Invalid start time", "Invalid stop time", "Invalid schedule: start time", "Usage:"
+                    "Schedule set for", "Invalid start time", "Invalid stop time", "Invalid schedule: start time", "Usage:", "Invalid schedule: start time", "Cross-midnight schedules are not supported"
                 ])
 
 # Time parsing tests
@@ -1109,7 +1120,7 @@ def test_ec2_schedule_with_aws_tags():
             
             # Test getting schedule from EC2 tags
             mock_get_schedule.return_value = {
-                'start_time': '09:00',
+                'start_time': '05:59',
                 'stop_time': '17:00'
             }
             mock_resolve.return_value = 'i-0df9c53001c5c837d'
@@ -1120,17 +1131,21 @@ def test_ec2_schedule_with_aws_tags():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d'}
             
             result = handle_ec2_schedule(request)
-            assert "9:00 AM to 5:00 PM" in result
+            assert "5:59 AM to 5:00 PM" in result
             
             # Test setting schedule with EC2 tags
             mock_set_schedule.return_value = True
             
             request = Mock()
-            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 8am to 6pm'}
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 5:59am to 6pm'}
             
             result = handle_ec2_schedule(request)
-            assert "Schedule set for" in result.json['text']
-            assert "8:00 AM to 6:00 PM" in result.json['text']
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Schedule set for" in result_text
+            assert "5:59 AM to 6:00 PM" in result_text
             
             # Test clearing schedule with EC2 tags
             mock_delete_schedule.return_value = True
@@ -1139,7 +1154,11 @@ def test_ec2_schedule_with_aws_tags():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
             
             result = handle_ec2_schedule(request)
-            assert "Schedule cleared for" in result.json['text']
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Schedule cleared for" in result_text
 
 def test_ec2_schedule_instance_not_controllable():
     """Test EC2 schedule with instance that cannot be controlled"""
@@ -1153,11 +1172,15 @@ def test_ec2_schedule_instance_not_controllable():
             mock_get_name.return_value = 'test-instance'
             
             request = Mock()
-            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 9am to 5pm'}
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 5:59am to 5pm'}
             
             result = handle_ec2_schedule(request)
-            assert "cannot be controlled by this service" in result
-            assert "EC2ControlsEnabled" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "cannot be controlled by this service" in result_text
+            assert "EC2ControlsEnabled" in result_text
 
 def test_list_instances_only_controllable():
     """Test that list instances only shows controllable instances"""
@@ -1291,7 +1314,11 @@ def test_ec2_disable_schedule_set_failed():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Failed to pause scheduler for `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to pause scheduler for `test-instance`" in result_text
 
 def test_ec2_disable_schedule_access_denied():
     """Test EC2 disable schedule set when instance cannot be controlled"""
@@ -1310,9 +1337,13 @@ def test_ec2_disable_schedule_access_denied():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 2h'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "test-instance" in result
-            assert "cannot be controlled by this service" in result
-            assert "EC2ControlsEnabled" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "test-instance" in result_text
+            assert "cannot be controlled by this service" in result_text
+            assert "EC2ControlsEnabled" in result_text
 
 def test_ec2_disable_schedule_instance_not_found():
     """Test EC2 disable schedule when instance is not found"""
@@ -1325,7 +1356,11 @@ def test_ec2_disable_schedule_instance_not_found():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'nonexistent-instance'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Instance `nonexistent-instance` not found" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Instance `nonexistent-instance` not found" in result_text
 
 def test_ec2_disable_schedule_usage_message():
     """Test EC2 disable schedule usage message"""
@@ -1334,8 +1369,12 @@ def test_ec2_disable_schedule_usage_message():
         request.form = {'user_id': 'U08QYU6AX0V', 'text': ''}
         
         result = handle_ec2_disable_schedule(request)
-        assert "Usage:" in result
-        assert "cancel" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage:" in result_text
+        assert "cancel" in result_text
 
 def test_ec2_disable_schedule_empty_text():
     """Test EC2 disable schedule with empty text"""
@@ -1344,7 +1383,11 @@ def test_ec2_disable_schedule_empty_text():
         request.form = {'user_id': 'U08QYU6AX0V', 'text': ''}
         
         result = handle_ec2_disable_schedule(request)
-        assert "Usage:" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage:" in result_text
 
 def test_ec2_disable_schedule_missing_text():
     """Test EC2 disable schedule with missing text"""
@@ -1353,7 +1396,11 @@ def test_ec2_disable_schedule_missing_text():
         request.form = {'user_id': 'U08QYU6AX0V'}
         
         result = handle_ec2_disable_schedule(request)
-        assert "Usage:" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage:" in result_text
 
 def test_ec2_disable_schedule_cancel():
     """Test EC2 disable schedule cancel command"""
@@ -1372,7 +1419,11 @@ def test_ec2_disable_schedule_cancel():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Unpaused scheduler service for `test-instance`" in result.json['text']
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Unpaused scheduler service for `test-instance`" in result_text
 
 def test_ec2_disable_schedule_clear():
     """Test EC2 disable schedule clear command"""
@@ -1391,7 +1442,11 @@ def test_ec2_disable_schedule_clear():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d clear'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Unpaused scheduler service for `test-instance`" in result.json['text']
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Unpaused scheduler service for `test-instance`" in result_text
 
 def test_ec2_disable_schedule_cancel_failed():
     """Test EC2 disable schedule cancel when AWS operation fails"""
@@ -1410,7 +1465,11 @@ def test_ec2_disable_schedule_cancel_failed():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "Failed to unpause scheduler for `i-0df9c53001c5c837d`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to unpause scheduler for `i-0df9c53001c5c837d`" in result_text
 
 def test_ec2_disable_schedule_cancel_not_controllable():
     """Test EC2 disable schedule cancel when instance cannot be controlled"""
@@ -1427,9 +1486,13 @@ def test_ec2_disable_schedule_cancel_not_controllable():
             request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d cancel'}
             
             result = handle_ec2_disable_schedule(request)
-            assert "test-instance" in result
-            assert "cannot be controlled by this service" in result
-            assert "EC2ControlsEnabled" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "test-instance" in result_text
+            assert "cannot be controlled by this service" in result_text
+            assert "EC2ControlsEnabled" in result_text
 
 def test_ec2_disable_schedule_case_insensitive_cancel():
     """Test EC2 disable schedule cancel with different case variations"""
@@ -1452,7 +1515,11 @@ def test_ec2_disable_schedule_case_insensitive_cancel():
                 request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {command}'}
                 
                 result = handle_ec2_disable_schedule(request)
-                assert "Unpaused scheduler service for `test-instance`" in result.json['text']
+                if hasattr(result, 'json'):
+                    result_text = result.json['text']
+                else:
+                    result_text = str(result)
+                assert "Unpaused scheduler service for `test-instance`" in result_text
 
 def test_ec2_disable_schedule_various_hours_formats():
     """Test EC2 disable schedule with various hours formats"""
@@ -1479,8 +1546,12 @@ def test_ec2_disable_schedule_various_hours_formats():
                 request.form = {'user_id': 'U08QYU6AX0V', 'text': f'i-0df9c53001c5c837d {hours_str}'}
                 
                 result = handle_ec2_disable_schedule(request)
-                assert "Paused scheduler for `test-instance`" in result.json['text']
-                assert f"for {hours} hours" in result.json['text']
+                if hasattr(result, 'json'):
+                    result_text = result.json['text']
+                else:
+                    result_text = str(result)
+                assert "Paused scheduler for `test-instance`" in result_text
+                assert f"for {hours} hours" in result_text
 
 # Disable Schedule Module tests
 def test_parse_hours_valid():
@@ -1688,7 +1759,11 @@ def test_ec2_stakeholder_remove_failed():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
             
             result = handle_ec2_stakeholder(request)
-            assert "Failed to remove stakeholder status for `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to remove stakeholder status for `test-instance`" in result_text
 
 def test_ec2_stakeholder_check_is_stakeholder():
     """Test EC2 stakeholder check when user is a stakeholder"""
@@ -1758,7 +1833,11 @@ def test_ec2_stakeholder_instance_not_found():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'nonexistent-instance claim'}
             
             result = handle_ec2_stakeholder(request)
-            assert "Instance `nonexistent-instance` not found" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Instance `nonexistent-instance` not found" in result_text
 
 def test_ec2_stakeholder_instance_not_controllable():
     """Test EC2 stakeholder when instance cannot be controlled"""
@@ -1775,8 +1854,12 @@ def test_ec2_stakeholder_instance_not_controllable():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
             
             result = handle_ec2_stakeholder(request)
-            assert "cannot be controlled by this service" in result
-            assert "EC2ControlsEnabled" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "cannot be controlled by this service" in result_text
+            assert "EC2ControlsEnabled" in result_text
 
 def test_ec2_stakeholder_invalid_action():
     """Test EC2 stakeholder with invalid action"""
@@ -1785,7 +1868,11 @@ def test_ec2_stakeholder_invalid_action():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d invalid'}
         
         result = handle_ec2_stakeholder(request)
-        assert "Action must be 'claim', 'remove', or 'check'" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Action must be 'claim', 'remove', or 'check'" in result_text
 
 def test_ec2_stakeholder_invalid_format():
     """Test EC2 stakeholder with invalid format"""
@@ -1794,7 +1881,11 @@ def test_ec2_stakeholder_invalid_format():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim extra-param'}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result_text
 
 def test_ec2_stakeholder_empty_text():
     """Test EC2 stakeholder with empty text"""
@@ -1803,7 +1894,11 @@ def test_ec2_stakeholder_empty_text():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': ''}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result_text
 
 def test_ec2_stakeholder_missing_text():
     """Test EC2 stakeholder with missing text"""
@@ -1812,7 +1907,11 @@ def test_ec2_stakeholder_missing_text():
         request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn'}
         
         result = handle_ec2_stakeholder(request)
-        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result
+        if hasattr(result, 'json'):
+            result_text = result.json['text']
+        else:
+            result_text = str(result)
+        assert "Usage: <instance-id|instance-name> [claim|remove|show]" in result_text
 
 def test_ec2_stakeholder_claim_failed_operation():
     """Test EC2 stakeholder claim when the operation fails"""
@@ -1831,7 +1930,11 @@ def test_ec2_stakeholder_claim_failed_operation():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
             
             result = handle_ec2_stakeholder(request)
-            assert "Failed to claim `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to claim `test-instance`" in result_text
 
 def test_ec2_stakeholder_claim_unknown_result():
     """Test EC2 stakeholder claim with unknown result from add_stakeholder"""
@@ -1850,7 +1953,11 @@ def test_ec2_stakeholder_claim_unknown_result():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d claim'}
             
             result = handle_ec2_stakeholder(request)
-            assert "Failed to claim `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to claim `test-instance`" in result_text
 
 def test_ec2_stakeholder_remove_unknown_result():
     """Test EC2 stakeholder remove with unknown result from remove_stakeholder"""
@@ -1869,7 +1976,11 @@ def test_ec2_stakeholder_remove_unknown_result():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
             
             result = handle_ec2_stakeholder(request)
-            assert "Failed to remove stakeholder status for `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "Failed to remove stakeholder status for `test-instance`" in result_text
 
 def test_ec2_stakeholder_remove_and_delete_tag():
     """Test EC2 stakeholder remove when it's the last stakeholder and tag gets deleted"""
@@ -1888,7 +1999,11 @@ def test_ec2_stakeholder_remove_and_delete_tag():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'i-0df9c53001c5c837d remove'}
             
             result = handle_ec2_stakeholder(request)
-            assert "You are no longer a stakeholder for `test-instance`" in result
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "You are no longer a stakeholder for `test-instance`" in result_text
 
 def test_ec2_stakeholder_with_instance_name():
     """Test EC2 stakeholder using instance name instead of ID"""
@@ -1907,7 +2022,11 @@ def test_ec2_stakeholder_with_instance_name():
             request.form = {'user_id': 'U08QYU6AX0V', 'user_name': 'fstjohn', 'text': 'test-instance claim'}
             
             result = handle_ec2_stakeholder(request)
-            assert "You are now a stakeholder for `test-instance`" in result 
+            if hasattr(result, 'json'):
+                result_text = result.json['text']
+            else:
+                result_text = str(result)
+            assert "You are now a stakeholder for `test-instance`" in result_text
 
 def test_resolve_identifier_with_suffix_append():
     """Users can pass only the prefix and it resolves by appending INSTANCE_NAME_SUFFIX"""
