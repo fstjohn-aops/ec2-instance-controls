@@ -2042,22 +2042,38 @@ def test_resolve_identifier_with_suffix_append():
         assert mock_get_by_name.call_args_list[1].args[0] == 'web01.aopstest.com'
 
 def test_ec2_schedule_set_on_time_too_late():
-    """Test setting schedule with ON time at or after 6am (should be rejected)"""
-    with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
-         patch('src.handlers.get_instance_name') as mock_get_name:
-        mock_resolve.return_value = 'i-0df9c53001c5c837d'
-        mock_get_name.return_value = 'i-0df9c53001c5c837d'
+    """Test setting schedule with ON time after 6am (should be rejected), but 6am should be allowed"""
+    with app.app_context():
+        with patch('src.handlers.resolve_instance_identifier') as mock_resolve, \
+             patch('src.handlers.get_instance_name') as mock_get_name, \
+             patch('src.handlers.can_control_instance_by_id') as mock_can_control, \
+             patch('src.handlers.set_schedule') as mock_set_schedule:
+            mock_resolve.return_value = 'i-0df9c53001c5c837d'
+            mock_get_name.return_value = 'i-0df9c53001c5c837d'
+            mock_can_control.return_value = True
+            mock_set_schedule.return_value = True
 
-        # Test exactly 6am
-        request = Mock()
-        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 6am to 7am'}
-        result = handle_ec2_schedule(request)
-        assert "Invalid ON time" in result
-        assert "earlier than 6:00 AM" in result
+            # Test exactly 6am - should now be allowed
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 6am to 7am'}
+            result = handle_ec2_schedule(request)
+            # Should not contain "Invalid ON time" since 6am is now allowed
+            assert "Invalid ON time" not in result.json['text']
+            # Should contain success message
+            assert "Schedule set for" in result.json['text']
 
-        # Test after 6am
-        request = Mock()
-        request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 7am to 8am'}
-        result = handle_ec2_schedule(request)
-        assert "Invalid ON time" in result
-        assert "earlier than 6:00 AM" in result
+            # Test 6:01am - should now be rejected
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 6:01am to 7am'}
+            result = handle_ec2_schedule(request)
+            # Error case returns a string, not JSON
+            assert "Invalid ON time" in str(result)
+            assert "earlier than 6:00 AM" in str(result)
+
+            # Test after 6am - should still be rejected
+            request = Mock()
+            request.form = {'user_id': 'U08QYU6AX0V', 'text': 'i-0df9c53001c5c837d 7am to 8am'}
+            result = handle_ec2_schedule(request)
+            # Error case returns a string, not JSON
+            assert "Invalid ON time" in str(result)
+            assert "earlier than 6:00 AM" in str(result)

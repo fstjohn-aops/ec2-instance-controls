@@ -1,7 +1,7 @@
 import logging
 import re
 import json
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from flask import jsonify
 from src.aws_client import get_instance_state, start_instance, stop_instance, restart_instance, resolve_instance_identifier, get_instance_name, fuzzy_search_instances, can_control_instance_by_id, add_stakeholder, remove_stakeholder, is_user_stakeholder
 from src.auth import get_all_region_instances
@@ -485,11 +485,12 @@ def handle_ec2_schedule(request):
             return f"Invalid schedule: start time ({start_time_str}) must be before end time ({stop_time_str}). Cross-midnight schedules are not supported."
         
         # Validate that ON time is not later than allowed
-        if start_time.hour >= ON_TIME_LATEST_HOUR:
+        latest_allowed_time = time(ON_TIME_LATEST_HOUR, 0)  # 6:00 AM
+        if start_time > latest_allowed_time:
             _log_user_action(user_id, user_name, "ec2_schedule_set", instance_id, {
                 "error": "on_time_too_late",
                 "start_time": start_time_str,
-                "note": f"on_time_must_be_before_{ON_TIME_LATEST_HOUR}am"
+                "note": f"on_time_must_be_at_or_before_{ON_TIME_LATEST_HOUR}am"
             }, False)
             return f"Invalid ON time: {start_time_str}. ON time must be at or earlier than {ON_TIME_LATEST_HOUR}:00 AM."
         
